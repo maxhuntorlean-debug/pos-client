@@ -18,6 +18,12 @@ function hasPermission(permission) {
   return currentUser.permissions?.includes(permission) ?? false;
 }
 
+function today() {
+  const date = new Date();
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
 function showLogin() {
   app.innerHTML = `
     <main class="login-page">
@@ -73,9 +79,10 @@ function showLogin() {
   });
 }
 
-function menuItem(permission, label) {
+function menuItem(permission, label, action = "") {
   if (!hasPermission(permission)) return "";
-  return `<button class="menu-item" type="button" disabled>${label}</button>`;
+  const actionAttr = action ? ` data-action="${action}"` : "";
+  return `<button class="menu-item" type="button"${actionAttr}>${label}</button>`;
 }
 
 function showHome() {
@@ -86,7 +93,7 @@ function showHome() {
         <div class="current-user">${escapeHtml(currentUser?.name || "Пользователь")}</div>
       </header>
       <section class="menu">
-        ${menuItem("sale.create", "💰 Реализация")}
+        ${menuItem("sale.create", "💰 Реализация", "sale")}
         ${menuItem("product.create", "📦 Приход")}
         ${menuItem("journal.read", "📋 Журнал реализации")}
         ${menuItem("report.read", "∑ Отчёт продаж")}
@@ -95,6 +102,7 @@ function showHome() {
       </section>
     </main>`;
 
+  app.querySelector('[data-action="sale"]')?.addEventListener("click", showSale);
   document.getElementById("logoutButton").addEventListener("click", async () => {
     try {
       await authLogout();
@@ -103,6 +111,43 @@ function showHome() {
       showLogin();
     }
   });
+}
+
+function showSale() {
+  const canChangeDate = hasPermission("sale.date.change");
+
+  app.innerHTML = `
+    <main class="sale-page">
+      <button id="saleBackButton" class="back-button" type="button">← Назад</button>
+
+      <div class="saleHeader">
+        <h2 class="saleTitle">Реализация</h2>
+        <input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}>
+      </div>
+
+      <div class="saleBarcodeRow">
+        <input id="saleBarcode" class="saleBarcode" type="text" placeholder="Штрихкод" readonly>
+        <button class="productMicButton" type="button" disabled>🎤</button>
+      </div>
+
+      <table class="saleTable">
+        <thead>
+          <tr><th>Код</th><th>Наименование</th><th>Цена</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="saleTotals">
+        <div>Количество: <span>0</span> шт.</div>
+        <div>Сумма: <span>0.00</span></div>
+      </div>
+
+      <div class="saleButtons">
+        <button class="saleButton" type="button" disabled>Продажа</button>
+      </div>
+    </main>`;
+
+  document.getElementById("saleBackButton").addEventListener("click", showHome);
 }
 
 async function start() {
