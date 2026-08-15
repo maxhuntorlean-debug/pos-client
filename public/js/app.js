@@ -1,4 +1,5 @@
 import { authLogin, authLogout, authMe } from "./api.js";
+import { keyboardHtml, initKeyboard, showKeyboard } from "./keyboard.js";
 
 const app = document.getElementById("app");
 let currentUser = null;
@@ -48,26 +49,19 @@ function showLogin() {
     error.textContent = "";
     button.disabled = true;
     button.textContent = "ВХОД...";
-
     const data = new FormData(form);
 
     try {
-      const login = await authLogin(
-        String(data.get("username") || "").trim(),
-        String(data.get("password") || "")
-      );
-
+      const login = await authLogin(String(data.get("username") || "").trim(), String(data.get("password") || ""));
       if (!login.success) {
         error.textContent = login.error?.message || "Ошибка авторизации";
         return;
       }
-
       const me = await authMe();
       if (!me.success) {
         error.textContent = me.error?.message || "Не удалось получить пользователя";
         return;
       }
-
       currentUser = me.data;
       showHome();
     } catch {
@@ -104,12 +98,7 @@ function showHome() {
 
   app.querySelector('[data-action="sale"]')?.addEventListener("click", showSale);
   document.getElementById("logoutButton").addEventListener("click", async () => {
-    try {
-      await authLogout();
-    } finally {
-      currentUser = null;
-      showLogin();
-    }
+    try { await authLogout(); } finally { currentUser = null; showLogin(); }
   });
 }
 
@@ -119,36 +108,33 @@ function showSale() {
   app.innerHTML = `
     <main class="sale-page">
       <button id="saleBackButton" class="back-button" type="button">← Назад</button>
-
       <div class="saleHeader">
         <h2 class="saleTitle">Реализация</h2>
         <div class="saleDateRow">
           <input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}>
         </div>
       </div>
-
       <div class="saleBarcodeRow">
-        <input id="saleBarcode" class="saleBarcode" type="text" placeholder="Штрихкод" readonly>
+        <input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" placeholder="Штрихкод" readonly>
         <button class="productMicButton" type="button" disabled>🎤</button>
       </div>
-
       <table class="saleTable">
-        <thead>
-          <tr><th>Код</th><th>Наименование</th><th>Цена</th></tr>
-        </thead>
+        <thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead>
         <tbody></tbody>
       </table>
-
       <div class="saleTotals">
         <div>Количество: <span>0</span> шт.</div>
         <div>Сумма: <span>0.00</span></div>
       </div>
-
       <div class="saleButtons">
         <button class="saleButton" type="button" disabled>Продажа</button>
       </div>
+      ${keyboardHtml()}
     </main>`;
 
+  initKeyboard();
+  const barcode = document.getElementById("saleBarcode");
+  barcode.addEventListener("click", () => showKeyboard(barcode));
   document.getElementById("saleBackButton").addEventListener("click", showHome);
 }
 
@@ -163,7 +149,6 @@ async function start() {
   } catch {
     // Login screen is the fallback when API is unavailable or session is absent.
   }
-
   showLogin();
 }
 
