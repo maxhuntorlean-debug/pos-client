@@ -1,4 +1,4 @@
-const API = "https://kotopanda-pos-api.lateshoy.workers.dev";
+const API = "https://pos-api.lateshoy.workers.dev";
 
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, {
