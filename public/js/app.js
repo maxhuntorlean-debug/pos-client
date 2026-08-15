@@ -1,4 +1,4 @@
-import { authLogin, authLogout, authMe } from "./api.js";
+import { authLogin, authLogout, authMe, getProductByBarcode } from "./api.js";
 import { keyboardHtml, initKeyboard, showKeyboard } from "./keyboard.js";
 
 const app = document.getElementById("app");
@@ -122,13 +122,14 @@ function showSale() {
         <input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" placeholder="Штрихкод" readonly>
         <button class="productMicButton" type="button" disabled>🎤</button>
       </div>
+      <div id="saleBarcodeError" class="saleBarcodeError" role="alert"></div>
       <table class="saleTable">
         <thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead>
-        <tbody></tbody>
+        <tbody id="saleItems"></tbody>
       </table>
       <div class="saleTotals">
-        <div>Количество: <span>0</span> шт.</div>
-        <div>Сумма: <span>0.00</span></div>
+        <div>Количество: <span id="saleCount">0</span> шт.</div>
+        <div>Сумма: <span id="saleSum">0.00</span></div>
       </div>
       <div class="saleButtons">
         <button class="saleButton" type="button" disabled>Продажа</button>
@@ -138,6 +139,52 @@ function showSale() {
 
   initKeyboard();
   const barcode = document.getElementById("saleBarcode");
+  const error = document.getElementById("saleBarcodeError");
+  const itemsBody = document.getElementById("saleItems");
+  const count = document.getElementById("saleCount");
+  const sum = document.getElementById("saleSum");
+  const saleItems = [];
+  let lookupTimer = null;
+  let lookupSequence = 0;
+
+  async function lookupBarcode() {
+    const code = barcode.value.trim();
+    if (code.length < 5) {
+      error.textContent = "";
+      return;
+    }
+
+    const sequence = ++lookupSequence;
+    const result = await getProductByBarcode(code);
+    if (sequence !== lookupSequence || barcode.value.trim() !== code) return;
+
+    if (!result.success) {
+      error.textContent = "Товар не найден";
+      return;
+    }
+
+    error.textContent = "";
+    const product = result.data;
+    saleItems.push(product);
+    itemsBody.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td>${escapeHtml(product.barcode)}</td>
+        <td>${escapeHtml(product.name)}</td>
+        <td>${Number(product.sell_price || 0).toFixed(2)}</td>
+      </tr>`);
+    count.textContent = String(saleItems.length);
+    sum.textContent = saleItems.reduce((total, item) => total + Number(item.sell_price || 0), 0).toFixed(2);
+    barcode.value = "";
+  }
+
+  barcode.addEventListener("input", () => {
+    error.textContent = "";
+    clearTimeout(lookupTimer);
+    if (barcode.value.trim().length >= 5) {
+      lookupTimer = setTimeout(lookupBarcode, 180);
+    }
+  });
+
   barcode.addEventListener("click", () => showKeyboard(barcode));
   document.getElementById("saleBackButton").addEventListener("click", showHome);
 }
