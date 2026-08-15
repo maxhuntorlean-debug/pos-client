@@ -5,7 +5,8 @@ import { showHome } from "./pages/home.js";
 import { showSale } from "./pages/sale.js";
 import { showIncome } from "./pages/income.js";
 import { showJournal } from "./pages/journal.js";
-import { showReport, showLog } from "./pages/simple.js";
+import { showReport } from "./pages/report.js";
+import { showLog } from "./pages/log.js";
 
 const app = document.getElementById("app");
 
