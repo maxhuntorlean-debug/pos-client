@@ -30,7 +30,7 @@ async function request(path, options = {}) {
       error: {
         message: typeof data.error === "string"
           ? data.error
-          : data.error?.message || `Ошибка API (${response.status})`
+          : data.error?.message || data.message || `Ошибка API (${response.status})`
       }
     };
   }
@@ -58,4 +58,11 @@ export function authLogout() {
 
 export function getProductByBarcode(barcode) {
   return request(`/api/products/${encodeURIComponent(barcode)}`);
+}
+
+export function createSale(sale) {
+  return request("/api/sales", {
+    method: "POST",
+    body: JSON.stringify(sale)
+  });
 }
