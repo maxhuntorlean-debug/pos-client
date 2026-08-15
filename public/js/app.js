@@ -1,5 +1,5 @@
 import { authLogin, authLogout, authMe, getProductByBarcode } from "./api.js";
-import { keyboardHtml, initKeyboard, showKeyboard } from "./keyboard.js";
+import { keyboardHtml, initKeyboard, showKeyboard, hideKeyboard } from "./keyboard.js";
 
 const app = document.getElementById("app");
 let currentUser = null;
@@ -119,10 +119,9 @@ function showSale() {
         </div>
       </div>
       <div class="saleBarcodeRow">
-        <input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" placeholder="Штрихкод" readonly>
+        <input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" maxlength="5" placeholder="Штрихкод" readonly>
         <button class="productMicButton" type="button" disabled>🎤</button>
       </div>
-      <div id="saleBarcodeError" class="saleBarcodeError" role="alert"></div>
       <table class="saleTable">
         <thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead>
         <tbody id="saleItems"></tbody>
@@ -139,31 +138,36 @@ function showSale() {
 
   initKeyboard();
   const barcode = document.getElementById("saleBarcode");
-  const error = document.getElementById("saleBarcodeError");
   const itemsBody = document.getElementById("saleItems");
   const count = document.getElementById("saleCount");
   const sum = document.getElementById("saleSum");
   const saleItems = [];
-  let lookupTimer = null;
   let lookupSequence = 0;
+  let barcodeError = false;
+
+  function resetBarcodeError() {
+    if (!barcodeError) return;
+    barcodeError = false;
+    barcode.value = "";
+    barcode.classList.remove("saleBarcodeNotFound");
+  }
 
   async function lookupBarcode() {
     const code = barcode.value.trim();
-    if (code.length < 5) {
-      error.textContent = "";
-      return;
-    }
+    if (code.length !== 5) return;
 
+    hideKeyboard();
     const sequence = ++lookupSequence;
     const result = await getProductByBarcode(code);
-    if (sequence !== lookupSequence || barcode.value.trim() !== code) return;
+    if (sequence !== lookupSequence) return;
 
     if (!result.success) {
-      error.textContent = "Товар не найден";
+      barcodeError = true;
+      barcode.value = "Код не найден";
+      barcode.classList.add("saleBarcodeNotFound");
       return;
     }
 
-    error.textContent = "";
     const product = result.data;
     saleItems.push(product);
     itemsBody.insertAdjacentHTML("beforeend", `
@@ -175,18 +179,24 @@ function showSale() {
     count.textContent = String(saleItems.length);
     sum.textContent = saleItems.reduce((total, item) => total + Number(item.sell_price || 0), 0).toFixed(2);
     barcode.value = "";
+    barcode.classList.remove("saleBarcodeNotFound");
   }
 
   barcode.addEventListener("input", () => {
-    error.textContent = "";
-    clearTimeout(lookupTimer);
-    if (barcode.value.trim().length >= 5) {
-      lookupTimer = setTimeout(lookupBarcode, 180);
-    }
+    if (barcodeError) return;
+    if (barcode.value.length > 5) barcode.value = barcode.value.slice(0, 5);
+    if (barcode.value.length === 5) lookupBarcode();
   });
 
-  barcode.addEventListener("click", () => showKeyboard(barcode));
-  document.getElementById("saleBackButton").addEventListener("click", showHome);
+  barcode.addEventListener("click", () => {
+    resetBarcodeError();
+    showKeyboard(barcode);
+  });
+
+  document.getElementById("saleBackButton").addEventListener("click", () => {
+    hideKeyboard();
+    showHome();
+  });
 }
 
 function showIncome() {
