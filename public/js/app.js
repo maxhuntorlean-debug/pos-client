@@ -22,7 +22,7 @@ function showLogin() {
   app.innerHTML = `
     <main class="login-page">
       <section class="login-card">
-        <div class="login-logo">KotoPanda</div>
+        <div class="login-logo">Котопанда v2+</div>
         <h1>Вход в систему</h1>
         <form id="loginForm" class="login-form">
           <label>Логин<input name="username" autocomplete="username" required></label>
@@ -81,9 +81,9 @@ function menuItem(permission, label) {
 function showHome() {
   app.innerHTML = `
     <main class="home-page">
-      <header class="header">
-        <div class="title">Котопанда</div>
-        <div class="current-user">${escapeHtml(currentUser?.name)}</div>
+      <header class="hero-header">
+        <div class="title">Котопанда v2+</div>
+        <div class="current-user">${escapeHtml(currentUser?.name || "Пользователь")}</div>
       </header>
       <section class="menu">
         ${menuItem("sale.create", "💰 Реализация")}
