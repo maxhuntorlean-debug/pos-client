@@ -17,7 +17,23 @@ async function request(path, options = {}) {
     data = null;
   }
 
-  if (data) return data;
+  if (data && typeof data === "object") {
+    if (data.ok === true) {
+      return {
+        success: true,
+        data: data.user ?? data.data ?? data
+      };
+    }
+
+    return {
+      success: false,
+      error: {
+        message: typeof data.error === "string"
+          ? data.error
+          : data.error?.message || `Ошибка API (${response.status})`
+      }
+    };
+  }
 
   return {
     success: false,
