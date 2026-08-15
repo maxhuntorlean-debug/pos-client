@@ -41,17 +41,53 @@ function showHome() {
 
 function showSale() {
   const canChangeDate = hasPermission("sale.date.change");
-  app.innerHTML = `<main class="sale-page"><button id="saleBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Реализация</h2><div class="saleDateRow"><input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}></div></div><div class="saleBarcodeRow"><input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" maxlength="5" placeholder="Штрихкод" readonly><button class="productMicButton" type="button" disabled>🎤</button></div><table class="saleTable"><thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead><tbody id="saleItems"></tbody></table><div class="saleTotals"><div>Количество: <span id="saleCount">0</span> шт.</div><div>Сумма: <span id="saleSum">0.00</span></div></div><div class="saleButtons"><button class="saleButton" type="button" disabled>Продажа</button></div>${dialogsHtml()}${keyboardHtml()}</main>`;
+  app.innerHTML = `<main class="sale-page"><button id="saleBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Реализация</h2><div class="saleDateRow"><input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}></div></div><div class="saleBarcodeRow"><input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" maxlength="5" placeholder="Штрихкод" readonly><button class="productMicButton" type="button" disabled>🎤</button></div><table class="saleTable"><thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead><tbody id="saleItems"></tbody></table><div class="saleTotals"><div>Количество: <span id="saleCount">0</span> шт.</div><div>Сумма: <span id="saleSum">0.00</span></div></div><div class="saleButtons"><button id="saleButton" class="saleButton" type="button" disabled>Продажа</button></div><div id="pricePanel" class="pricePanel"><div class="pricePanelTitle">Изменить цену</div><input id="newPrice" class="saleBarcode priceInput" type="text" inputmode="none" autocomplete="off" readonly></div>${dialogsHtml()}${keyboardHtml()}</main>`;
 
   initKeyboard();
   const barcode = document.getElementById("saleBarcode"); const itemsBody = document.getElementById("saleItems"); const count = document.getElementById("saleCount"); const sum = document.getElementById("saleSum"); const saleItems = [];
+  const backButton = document.getElementById("saleBackButton"); const docDate = document.getElementById("docDate"); const saleButton = document.getElementById("saleButton");
   let lookupSequence = 0; let barcodeError = false; let selectedIndex = -1;
 
   function updateTotals() { count.textContent = String(saleItems.length); sum.textContent = saleItems.reduce((total, item) => total + Number(item.sell_price || 0), 0).toFixed(2); }
   function drawSaleTable() { itemsBody.innerHTML = saleItems.map((product, index) => `<tr data-index="${index}" class="${selectedIndex === index ? "selected" : ""}"><td>${escapeHtml(product.barcode)}</td><td>${escapeHtml(product.name)}</td><td>${Number(product.sell_price || 0).toFixed(2)}</td></tr>`).join(""); updateTotals(); }
   function cancelSelection() { selectedIndex = -1; drawSaleTable(); }
   function deleteSelected() { if (selectedIndex < 0) return; saleItems.splice(selectedIndex, 1); selectedIndex = -1; drawSaleTable(); }
-  function changePrice() { if (selectedIndex < 0) return; cancelSelection(); }
+
+  function setSaleLocked(locked) {
+    saleButton.disabled = true;
+    backButton.disabled = locked;
+    barcode.disabled = locked;
+    docDate.disabled = locked || !canChangeDate;
+  }
+
+  function closePricePanel() {
+    document.getElementById("pricePanel")?.classList.remove("show", "keyboardOpen");
+    selectedIndex = -1;
+    drawSaleTable();
+    setSaleLocked(false);
+  }
+
+  function savePrice() {
+    if (!hasPermission("sale.item.select") || selectedIndex < 0) return;
+    const input = document.getElementById("newPrice");
+    const price = Number(input.value);
+    if (!Number.isFinite(price) || price <= 0) return;
+    saleItems[selectedIndex].sell_price = price;
+    drawSaleTable();
+  }
+
+  function changePrice() {
+    if (!hasPermission("sale.item.select") || selectedIndex < 0) return;
+    const input = document.getElementById("newPrice");
+    const panel = document.getElementById("pricePanel");
+    input.value = saleItems[selectedIndex].sell_price;
+    panel.classList.add("show", "keyboardOpen");
+    setSaleLocked(true);
+    showKeyboard(input, {
+      onEnter: savePrice,
+      onClose: closePricePanel
+    });
+  }
 
   itemsBody.addEventListener("click", event => {
     if (!hasPermission("sale.item.select")) return;
@@ -69,7 +105,7 @@ function showSale() {
   async function lookupBarcode() { const code = barcode.value.trim(); if (code.length !== 5) return; hideKeyboard(); const sequence = ++lookupSequence; const result = await getProductByBarcode(code); if (sequence !== lookupSequence) return; if (!result.success) { barcodeError = true; barcode.value = "Код не найден"; barcode.classList.add("saleBarcodeNotFound"); return; } saleItems.push(result.data); drawSaleTable(); barcode.value = ""; barcode.classList.remove("saleBarcodeNotFound"); }
   barcode.addEventListener("input", () => { if (barcodeError) return; if (barcode.value.length > 5) barcode.value = barcode.value.slice(0, 5); if (barcode.value.length === 5) lookupBarcode(); });
   barcode.addEventListener("click", () => { resetBarcodeError(); showKeyboard(barcode); });
-  document.getElementById("saleBackButton").addEventListener("click", () => { hideKeyboard(); showHome(); });
+  backButton.addEventListener("click", () => { hideKeyboard(); showHome(); });
 }
 
 function showIncome() { app.innerHTML = `<main class="sale-page document-page"><button id="incomeBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Создание товара</h2></div><div class="productForm"><div class="formGroup"><label class="formLabel" for="productName">Наименование</label><div class="productNameRow"><input id="productName" class="productInput" type="text" placeholder="Введите наименование" autocomplete="off"><button class="productMicButton" type="button" disabled>🎤</button></div></div><div class="productPrices"><div class="formGroup"><label class="formLabel" for="productBuyPrice">Закупочная цена</label><input id="productBuyPrice" class="productInput productPriceInput" type="text" inputmode="none" placeholder="0.00" readonly></div><div class="formGroup"><label class="formLabel" for="productSellPrice">Цена продажи</label><input id="productSellPrice" class="productInput productPriceInput" type="text" inputmode="none" placeholder="0.00" readonly></div></div><button class="productCreateButton" type="button" disabled>Создать товар</button></div>${keyboardHtml()}</main>`; initKeyboard(); document.getElementById("productBuyPrice").addEventListener("click", event => showKeyboard(event.currentTarget)); document.getElementById("productSellPrice").addEventListener("click", event => showKeyboard(event.currentTarget)); document.getElementById("incomeBackButton").addEventListener("click", showHome); }
