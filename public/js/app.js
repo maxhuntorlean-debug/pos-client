@@ -1,4 +1,4 @@
-import { authLogin, authLogout, authMe, getProductByBarcode } from "./api.js";
+import { authLogin, authLogout, authMe, getProductByBarcode, createSale } from "./api.js";
 import { keyboardHtml, initKeyboard, showKeyboard, hideKeyboard } from "./keyboard.js";
 import { dialogsHtml, showChoice, showConfirm } from "./dialogs.js";
 
@@ -41,20 +41,20 @@ function showHome() {
 
 function showSale() {
   const canChangeDate = hasPermission("sale.date.change");
-  app.innerHTML = `<main class="sale-page"><button id="saleBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Реализация</h2><div class="saleDateRow"><input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}></div></div><div class="saleBarcodeRow"><input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" maxlength="5" placeholder="Штрихкод" readonly><button class="productMicButton" type="button" disabled>🎤</button></div><table class="saleTable"><thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead><tbody id="saleItems"></tbody></table><div class="saleTotals"><div>Количество: <span id="saleCount">0</span> шт.</div><div>Сумма: <span id="saleSum">0.00</span></div></div><div class="saleButtons"><button id="saleButton" class="saleButton" type="button" disabled>Продажа</button></div><div id="pricePanel" class="pricePanel"><div class="pricePanelTitle">Изменить цену</div><input id="newPrice" class="saleBarcode priceInput" type="text" inputmode="none" autocomplete="off" readonly></div>${dialogsHtml()}${keyboardHtml()}</main>`;
+  app.innerHTML = `<main class="sale-page"><button id="saleBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Реализация</h2><div class="saleDateRow"><input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}></div></div><div class="saleBarcodeRow"><input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" maxlength="5" placeholder="Штрихкод" readonly><button class="productMicButton" type="button" disabled>🎤</button></div><table class="saleTable"><thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead><tbody id="saleItems"></tbody></table><div class="saleTotals"><div>Количество: <span id="saleCount">0</span> шт.</div><div>Сумма: <span id="saleSum">0.00</span></div></div><div class="saleButtons"><button id="saleButton" class="saleButton" type="button" disabled>Продажа</button></div><div id="saleStatus" class="saleStatus" aria-live="polite"></div><div id="pricePanel" class="pricePanel"><div class="pricePanelTitle">Изменить цену</div><input id="newPrice" class="saleBarcode priceInput" type="text" inputmode="none" autocomplete="off" readonly></div>${dialogsHtml()}${keyboardHtml()}</main>`;
 
   initKeyboard();
   const barcode = document.getElementById("saleBarcode"); const itemsBody = document.getElementById("saleItems"); const count = document.getElementById("saleCount"); const sum = document.getElementById("saleSum"); const saleItems = [];
-  const backButton = document.getElementById("saleBackButton"); const docDate = document.getElementById("docDate"); const saleButton = document.getElementById("saleButton");
-  let lookupSequence = 0; let barcodeError = false; let selectedIndex = -1;
+  const backButton = document.getElementById("saleBackButton"); const docDate = document.getElementById("docDate"); const saleButton = document.getElementById("saleButton"); const saleStatus = document.getElementById("saleStatus");
+  let lookupSequence = 0; let barcodeError = false; let selectedIndex = -1; let saleSaving = false;
 
-  function updateTotals() { count.textContent = String(saleItems.length); sum.textContent = saleItems.reduce((total, item) => total + Number(item.sell_price || 0), 0).toFixed(2); }
+  function updateTotals() { count.textContent = String(saleItems.length); sum.textContent = saleItems.reduce((total, item) => total + Number(item.sell_price || 0), 0).toFixed(2); saleButton.disabled = saleItems.length === 0 || saleSaving; }
   function drawSaleTable() { itemsBody.innerHTML = saleItems.map((product, index) => `<tr data-index="${index}" class="${selectedIndex === index ? "selected" : ""}"><td>${escapeHtml(product.barcode)}</td><td>${escapeHtml(product.name)}</td><td>${Number(product.sell_price || 0).toFixed(2)}</td></tr>`).join(""); updateTotals(); }
   function cancelSelection() { selectedIndex = -1; drawSaleTable(); }
   function deleteSelected() { if (selectedIndex < 0) return; saleItems.splice(selectedIndex, 1); selectedIndex = -1; drawSaleTable(); }
 
   function setSaleLocked(locked) {
-    saleButton.disabled = true;
+    saleButton.disabled = locked || saleItems.length === 0 || saleSaving;
     backButton.disabled = locked;
     barcode.disabled = locked;
     docDate.disabled = locked || !canChangeDate;
@@ -83,14 +83,11 @@ function showSale() {
     input.value = saleItems[selectedIndex].sell_price;
     panel.classList.add("show", "keyboardOpen");
     setSaleLocked(true);
-    showKeyboard(input, {
-      onEnter: savePrice,
-      onClose: closePricePanel
-    });
+    showKeyboard(input, { onEnter: savePrice, onClose: closePricePanel });
   }
 
   itemsBody.addEventListener("click", event => {
-    if (!hasPermission("sale.item.select")) return;
+    if (!hasPermission("sale.item.select") || saleSaving) return;
     if (document.getElementById("keyboard")?.classList.contains("show")) return;
     const row = event.target.closest("tr[data-index]"); if (!row) return;
     selectedIndex = Number(row.dataset.index); drawSaleTable();
@@ -104,8 +101,60 @@ function showSale() {
   function resetBarcodeError() { if (!barcodeError) return; barcodeError = false; barcode.value = ""; barcode.classList.remove("saleBarcodeNotFound"); }
   async function lookupBarcode() { const code = barcode.value.trim(); if (code.length !== 5) return; hideKeyboard(); const sequence = ++lookupSequence; const result = await getProductByBarcode(code); if (sequence !== lookupSequence) return; if (!result.success) { barcodeError = true; barcode.value = "Код не найден"; barcode.classList.add("saleBarcodeNotFound"); return; } saleItems.push(result.data); drawSaleTable(); barcode.value = ""; barcode.classList.remove("saleBarcodeNotFound"); }
   barcode.addEventListener("input", () => { if (barcodeError) return; if (barcode.value.length > 5) barcode.value = barcode.value.slice(0, 5); if (barcode.value.length === 5) lookupBarcode(); });
-  barcode.addEventListener("click", () => { resetBarcodeError(); showKeyboard(barcode); });
+  barcode.addEventListener("click", () => { if (saleSaving) return; resetBarcodeError(); showKeyboard(barcode); });
+
+  async function saveSale() {
+    if (saleSaving || saleItems.length === 0) return;
+    const now = new Date();
+    const saleDoc = {
+      sale_date: docDate.value,
+      sale_time: now.toLocaleTimeString("ru-RU", { hour12: false }),
+      sum: saleItems.reduce((total, item) => total + Number(item.sell_price || 0), 0),
+      items: saleItems.map(item => ({
+        barcode: Number(item.barcode),
+        name: item.name,
+        buy_price: Number(item.buy_price || 0),
+        sell_price: Number(item.sell_price || 0)
+      }))
+    };
+
+    saleSaving = true;
+    saleStatus.className = "saleStatus show";
+    saleStatus.textContent = "Выполняется продажа...";
+    setSaleLocked(true);
+
+    let result;
+    try {
+      result = await createSale(saleDoc);
+    } catch {
+      result = { success: false, error: { message: "Нет связи с сервером" } };
+    }
+
+    if (!result.success) {
+      saleSaving = false;
+      saleStatus.className = "saleStatus show error";
+      saleStatus.textContent = result.error?.message || "Ошибка сохранения.";
+      setSaleLocked(false);
+      return;
+    }
+
+    const saleId = result.data?.id;
+    saleItems.length = 0;
+    selectedIndex = -1;
+    barcode.value = "";
+    barcodeError = false;
+    barcode.classList.remove("saleBarcodeNotFound");
+    docDate.value = today();
+    saleSaving = false;
+    drawSaleTable();
+    setSaleLocked(false);
+    saleStatus.className = "saleStatus show success";
+    saleStatus.textContent = saleId ? `Продажа выполнена. Документ № ${saleId}` : "Продажа выполнена.";
+  }
+
+  saleButton.addEventListener("click", saveSale);
   backButton.addEventListener("click", () => { hideKeyboard(); showHome(); });
+  drawSaleTable();
 }
 
 function showIncome() { app.innerHTML = `<main class="sale-page document-page"><button id="incomeBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Создание товара</h2></div><div class="productForm"><div class="formGroup"><label class="formLabel" for="productName">Наименование</label><div class="productNameRow"><input id="productName" class="productInput" type="text" placeholder="Введите наименование" autocomplete="off"><button class="productMicButton" type="button" disabled>🎤</button></div></div><div class="productPrices"><div class="formGroup"><label class="formLabel" for="productBuyPrice">Закупочная цена</label><input id="productBuyPrice" class="productInput productPriceInput" type="text" inputmode="none" placeholder="0.00" readonly></div><div class="formGroup"><label class="formLabel" for="productSellPrice">Цена продажи</label><input id="productSellPrice" class="productInput productPriceInput" type="text" inputmode="none" placeholder="0.00" readonly></div></div><button class="productCreateButton" type="button" disabled>Создать товар</button></div>${keyboardHtml()}</main>`; initKeyboard(); document.getElementById("productBuyPrice").addEventListener("click", event => showKeyboard(event.currentTarget)); document.getElementById("productSellPrice").addEventListener("click", event => showKeyboard(event.currentTarget)); document.getElementById("incomeBackButton").addEventListener("click", showHome); }
