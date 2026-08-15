@@ -1,166 +1,19 @@
 import { authLogin, authLogout, authMe, getProductByBarcode, createSale } from "./api.js";
 import { keyboardHtml, initKeyboard, showKeyboard, hideKeyboard } from "./keyboard.js";
-import { dialogsHtml, showChoice, showConfirm } from "./dialogs.js";
+import { dialogsHtml, showChoice, showConfirm, showMessage } from "./dialogs.js";
 
 const app = document.getElementById("app");
 let currentUser = null;
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function hasPermission(permission) {
-  if (!currentUser) return false;
-  if (currentUser.permissions?.includes("*")) return true;
-  return currentUser.permissions?.includes(permission) ?? false;
-}
-
-function today() {
-  const date = new Date();
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-}
-
-function showLogin() {
-  app.innerHTML = `<main class="login-page"><section class="login-card"><div class="login-logo">Котопанда v2+</div><h1>Вход в систему</h1><form id="loginForm" class="login-form"><label>Логин<input name="username" autocomplete="username" required></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><div id="loginError" class="error" role="alert"></div><button id="loginButton" type="submit">ВОЙТИ</button></form></section></main>`;
-  const form = document.getElementById("loginForm"); const error = document.getElementById("loginError"); const button = document.getElementById("loginButton");
-  form.addEventListener("submit", async event => { event.preventDefault(); error.textContent = ""; button.disabled = true; button.textContent = "ВХОД..."; const data = new FormData(form); try { const login = await authLogin(String(data.get("username") || "").trim(), String(data.get("password") || "")); if (!login.success) { error.textContent = login.error?.message || "Ошибка авторизации"; return; } const me = await authMe(); if (!me.success) { error.textContent = me.error?.message || "Не удалось получить пользователя"; return; } currentUser = me.data; showHome(); } catch { error.textContent = "Нет связи с сервером"; } finally { button.disabled = false; button.textContent = "ВОЙТИ"; } });
-}
-
-function menuItem(permission, label, action = "") { if (!hasPermission(permission)) return ""; const actionAttr = action ? ` data-action="${action}"` : ""; return `<button class="menu-item" type="button"${actionAttr}>${label}</button>`; }
-
-function showHome() {
-  app.innerHTML = `<main class="home-page"><header class="hero-header"><div class="title">Котопанда v2+</div><div class="current-user">${escapeHtml(currentUser?.name || "Пользователь")}</div></header><section class="menu">${menuItem("sale.create", "💰 Реализация", "sale")}${menuItem("product.create", "📦 Приход", "income")}${menuItem("journal.read", "📋 Журнал реализации", "journal")}${menuItem("report.read", "∑ Отчёт продаж", "report")}${menuItem("event.read", "🕘 Журнал событий", "log")}<button id="logoutButton" class="menu-item logout" type="button">🚪 Выйти</button></section></main>`;
-  app.querySelector('[data-action="sale"]')?.addEventListener("click", showSale); app.querySelector('[data-action="income"]')?.addEventListener("click", showIncome); app.querySelector('[data-action="journal"]')?.addEventListener("click", showJournal); app.querySelector('[data-action="report"]')?.addEventListener("click", showReport); app.querySelector('[data-action="log"]')?.addEventListener("click", showLog); document.getElementById("logoutButton").addEventListener("click", async () => { try { await authLogout(); } finally { currentUser = null; showLogin(); } });
-}
-
-function showSale() {
-  const canChangeDate = hasPermission("sale.date.change");
-  app.innerHTML = `<main class="sale-page"><button id="saleBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Реализация</h2><div class="saleDateRow"><input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}></div></div><div class="saleBarcodeRow"><input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" autocomplete="off" maxlength="5" placeholder="Штрихкод" readonly><button class="productMicButton" type="button" disabled>🎤</button></div><table class="saleTable"><thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead><tbody id="saleItems"></tbody></table><div class="saleTotals"><div>Количество: <span id="saleCount">0</span> шт.</div><div>Сумма: <span id="saleSum">0.00</span></div></div><div class="saleButtons"><button id="saleButton" class="saleButton" type="button" disabled>Продажа</button></div><div id="saleStatus" class="saleStatus" aria-live="polite"></div><div id="pricePanel" class="pricePanel"><div class="pricePanelTitle">Изменить цену</div><input id="newPrice" class="saleBarcode priceInput" type="text" inputmode="none" autocomplete="off" readonly></div>${dialogsHtml()}${keyboardHtml()}</main>`;
-
-  initKeyboard();
-  const barcode = document.getElementById("saleBarcode"); const itemsBody = document.getElementById("saleItems"); const count = document.getElementById("saleCount"); const sum = document.getElementById("saleSum"); const saleItems = [];
-  const backButton = document.getElementById("saleBackButton"); const docDate = document.getElementById("docDate"); const saleButton = document.getElementById("saleButton"); const saleStatus = document.getElementById("saleStatus");
-  let lookupSequence = 0; let barcodeError = false; let selectedIndex = -1; let saleSaving = false;
-
-  function updateTotals() { count.textContent = String(saleItems.length); sum.textContent = saleItems.reduce((total, item) => total + Number(item.sell_price || 0), 0).toFixed(2); saleButton.disabled = saleItems.length === 0 || saleSaving; }
-  function drawSaleTable() { itemsBody.innerHTML = saleItems.map((product, index) => `<tr data-index="${index}" class="${selectedIndex === index ? "selected" : ""}"><td>${escapeHtml(product.barcode)}</td><td>${escapeHtml(product.name)}</td><td>${Number(product.sell_price || 0).toFixed(2)}</td></tr>`).join(""); updateTotals(); }
-  function cancelSelection() { selectedIndex = -1; drawSaleTable(); }
-  function deleteSelected() { if (selectedIndex < 0) return; saleItems.splice(selectedIndex, 1); selectedIndex = -1; drawSaleTable(); }
-
-  function setSaleLocked(locked) {
-    saleButton.disabled = locked || saleItems.length === 0 || saleSaving;
-    backButton.disabled = locked;
-    barcode.disabled = locked;
-    docDate.disabled = locked || !canChangeDate;
-  }
-
-  function closePricePanel() {
-    document.getElementById("pricePanel")?.classList.remove("show", "keyboardOpen");
-    selectedIndex = -1;
-    drawSaleTable();
-    setSaleLocked(false);
-  }
-
-  function savePrice() {
-    if (!hasPermission("sale.item.select") || selectedIndex < 0) return;
-    const input = document.getElementById("newPrice");
-    const price = Number(input.value);
-    if (!Number.isFinite(price) || price <= 0) return;
-    saleItems[selectedIndex].sell_price = price;
-    drawSaleTable();
-  }
-
-  function changePrice() {
-    if (!hasPermission("sale.item.select") || selectedIndex < 0) return;
-    const input = document.getElementById("newPrice");
-    const panel = document.getElementById("pricePanel");
-    input.value = saleItems[selectedIndex].sell_price;
-    panel.classList.add("show", "keyboardOpen");
-    setSaleLocked(true);
-    showKeyboard(input, { onEnter: savePrice, onClose: closePricePanel });
-  }
-
-  itemsBody.addEventListener("click", event => {
-    if (!hasPermission("sale.item.select") || saleSaving) return;
-    if (document.getElementById("keyboard")?.classList.contains("show")) return;
-    const row = event.target.closest("tr[data-index]"); if (!row) return;
-    selectedIndex = Number(row.dataset.index); drawSaleTable();
-    setTimeout(() => showChoice("Выберите действие", [
-      ["Изменить цену", changePrice],
-      ["Удалить товар", () => showConfirm("Удалить товар?", "Выбранный товар будет удалён", deleteSelected, cancelSelection)],
-      ["Отмена", cancelSelection]
-    ]), 200);
-  });
-
-  function resetBarcodeError() { if (!barcodeError) return; barcodeError = false; barcode.value = ""; barcode.classList.remove("saleBarcodeNotFound"); }
-  async function lookupBarcode() { const code = barcode.value.trim(); if (code.length !== 5) return; hideKeyboard(); const sequence = ++lookupSequence; const result = await getProductByBarcode(code); if (sequence !== lookupSequence) return; if (!result.success) { barcodeError = true; barcode.value = "Код не найден"; barcode.classList.add("saleBarcodeNotFound"); return; } saleItems.push(result.data); drawSaleTable(); barcode.value = ""; barcode.classList.remove("saleBarcodeNotFound"); }
-  barcode.addEventListener("input", () => { if (barcodeError) return; if (barcode.value.length > 5) barcode.value = barcode.value.slice(0, 5); if (barcode.value.length === 5) lookupBarcode(); });
-  barcode.addEventListener("click", () => { if (saleSaving) return; resetBarcodeError(); showKeyboard(barcode); });
-
-  async function saveSale() {
-    if (saleSaving || saleItems.length === 0) return;
-    const now = new Date();
-    const saleDoc = {
-      sale_date: docDate.value,
-      sale_time: now.toLocaleTimeString("ru-RU", { hour12: false }),
-      sum: saleItems.reduce((total, item) => total + Number(item.sell_price || 0), 0),
-      items: saleItems.map(item => ({
-        barcode: Number(item.barcode),
-        name: item.name,
-        buy_price: Number(item.buy_price || 0),
-        sell_price: Number(item.sell_price || 0)
-      }))
-    };
-
-    saleSaving = true;
-    saleStatus.className = "saleStatus show";
-    saleStatus.textContent = "Выполняется продажа...";
-    setSaleLocked(true);
-
-    let result;
-    try {
-      result = await createSale(saleDoc);
-    } catch {
-      result = { success: false, error: { message: "Нет связи с сервером" } };
-    }
-
-    if (!result.success) {
-      saleSaving = false;
-      saleStatus.className = "saleStatus show error";
-      saleStatus.textContent = result.error?.message || "Ошибка сохранения.";
-      setSaleLocked(false);
-      return;
-    }
-
-    const saleId = result.data?.id;
-    saleItems.length = 0;
-    selectedIndex = -1;
-    barcode.value = "";
-    barcodeError = false;
-    barcode.classList.remove("saleBarcodeNotFound");
-    docDate.value = today();
-    saleSaving = false;
-    drawSaleTable();
-    setSaleLocked(false);
-    saleStatus.className = "saleStatus show success";
-    saleStatus.textContent = saleId ? `Продажа выполнена. Документ № ${saleId}` : "Продажа выполнена.";
-  }
-
-  saleButton.addEventListener("click", saveSale);
-  backButton.addEventListener("click", () => { hideKeyboard(); showHome(); });
-  drawSaleTable();
-}
-
-function showIncome() { app.innerHTML = `<main class="sale-page document-page"><button id="incomeBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Создание товара</h2></div><div class="productForm"><div class="formGroup"><label class="formLabel" for="productName">Наименование</label><div class="productNameRow"><input id="productName" class="productInput" type="text" placeholder="Введите наименование" autocomplete="off"><button class="productMicButton" type="button" disabled>🎤</button></div></div><div class="productPrices"><div class="formGroup"><label class="formLabel" for="productBuyPrice">Закупочная цена</label><input id="productBuyPrice" class="productInput productPriceInput" type="text" inputmode="none" placeholder="0.00" readonly></div><div class="formGroup"><label class="formLabel" for="productSellPrice">Цена продажи</label><input id="productSellPrice" class="productInput productPriceInput" type="text" inputmode="none" placeholder="0.00" readonly></div></div><button class="productCreateButton" type="button" disabled>Создать товар</button></div>${keyboardHtml()}</main>`; initKeyboard(); document.getElementById("productBuyPrice").addEventListener("click", event => showKeyboard(event.currentTarget)); document.getElementById("productSellPrice").addEventListener("click", event => showKeyboard(event.currentTarget)); document.getElementById("incomeBackButton").addEventListener("click", showHome); }
-function documentListPage({ id, title, columns, footer = "" }) { return `<main class="sale-page document-page"><button id="${id}BackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">${title}</h2></div><div class="journalFilter"><input type="date" class="saleDate" value="${today()}"><input type="date" class="saleDate" value="${today()}"></div><button class="saleButton documentShowButton" type="button" disabled>Показать</button><table class="saleTable"><thead><tr>${columns.map(column => `<th>${column}</th>`).join("")}</tr></thead><tbody></tbody>${footer}</table></main>`; }
-function showJournal() { app.innerHTML = documentListPage({ id: "journal", title: "Журнал продаж", columns: ["Дата", "Документ", "Сумма"] }); document.getElementById("journalBackButton").addEventListener("click", showHome); }
-function showReport() { app.innerHTML = documentListPage({ id: "report", title: "Отчет продаж", columns: ["ДОК", "ТОВАР", "ПРОД"], footer: '<tfoot><tr><th colspan="2">ИТОГО</th><th>0.00</th></tr></tfoot>' }); document.getElementById("reportBackButton").addEventListener("click", showHome); }
-function showLog() { app.innerHTML = documentListPage({ id: "log", title: "Журнал событий", columns: ["Дата", "Событие", "Описание"] }); document.getElementById("logBackButton").addEventListener("click", showHome); }
-async function start() { try { const me = await authMe(); if (me.success) { currentUser = me.data; showHome(); return; } } catch {} showLogin(); }
-start();
+function escapeHtml(value){return String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
+function hasPermission(permission){if(!currentUser)return false;if(currentUser.permissions?.includes("*"))return true;return currentUser.permissions?.includes(permission)??false}
+function today(){const date=new Date();const local=new Date(date.getTime()-date.getTimezoneOffset()*60000);return local.toISOString().slice(0,10)}
+function showLogin(){app.innerHTML=`<main class="login-page"><section class="login-card"><div class="login-logo">Котопанда v2+</div><h1>Вход в систему</h1><form id="loginForm" class="login-form"><label>Логин<input name="username" autocomplete="username" required></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><div id="loginError" class="error"></div><button id="loginButton" type="submit">ВОЙТИ</button></form></section></main>`;const form=document.getElementById("loginForm"),error=document.getElementById("loginError"),button=document.getElementById("loginButton");form.addEventListener("submit",async event=>{event.preventDefault();error.textContent="";button.disabled=true;button.textContent="ВХОД...";const data=new FormData(form);try{const login=await authLogin(String(data.get("username")||"").trim(),String(data.get("password")||""));if(!login.success){error.textContent=login.error?.message||"Ошибка авторизации";return}const me=await authMe();if(!me.success){error.textContent=me.error?.message||"Не удалось получить пользователя";return}currentUser=me.data;showHome()}catch{error.textContent="Нет связи с сервером"}finally{button.disabled=false;button.textContent="ВОЙТИ"}})}
+function menuItem(permission,label,action=""){if(!hasPermission(permission))return"";return`<button class="menu-item" type="button"${action?` data-action="${action}"`:""}>${label}</button>`}
+function showHome(){app.innerHTML=`<main class="home-page"><header class="hero-header"><div class="title">Котопанда v2+</div><div class="current-user">${escapeHtml(currentUser?.name||"Пользователь")}</div></header><section class="menu">${menuItem("sale.create","💰 Реализация","sale")}${menuItem("product.create","📦 Приход","income")}${menuItem("journal.read","📋 Журнал реализации","journal")}${menuItem("report.read","∑ Отчёт продаж","report")}${menuItem("event.read","🕘 Журнал событий","log")}<button id="logoutButton" class="menu-item logout" type="button">🚪 Выйти</button></section></main>`;app.querySelector('[data-action="sale"]')?.addEventListener("click",showSale);app.querySelector('[data-action="income"]')?.addEventListener("click",showIncome);app.querySelector('[data-action="journal"]')?.addEventListener("click",showJournal);app.querySelector('[data-action="report"]')?.addEventListener("click",showReport);app.querySelector('[data-action="log"]')?.addEventListener("click",showLog);document.getElementById("logoutButton").addEventListener("click",async()=>{try{await authLogout()}finally{currentUser=null;showLogin()}})}
+function showSale(){const canChangeDate=hasPermission("sale.date.change");app.innerHTML=`<main class="sale-page"><button id="saleBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Реализация</h2><input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate?"":"disabled"}></div><div class="saleBarcodeRow"><input id="saleBarcode" class="saleBarcode" type="text" inputmode="none" maxlength="5" placeholder="Штрихкод" readonly><button class="productMicButton" type="button" disabled>🎤</button></div><table class="saleTable"><thead><tr><th>Код</th><th>Наименование</th><th>Цена</th></tr></thead><tbody id="saleItems"></tbody></table><div class="saleTotals"><div>Количество: <span id="saleCount">0</span> шт.</div><div>Сумма: <span id="saleSum">0.00</span></div></div><button id="saleButton" class="saleButton" type="button" disabled>Продажа</button><div id="pricePanel" class="pricePanel"><div class="pricePanelTitle">Изменить цену</div><input id="newPrice" class="saleBarcode priceInput" type="text" inputmode="none" readonly></div>${dialogsHtml()}${keyboardHtml()}</main>`;initKeyboard();const barcode=document.getElementById("saleBarcode"),itemsBody=document.getElementById("saleItems"),count=document.getElementById("saleCount"),sum=document.getElementById("saleSum"),backButton=document.getElementById("saleBackButton"),docDate=document.getElementById("docDate"),saleButton=document.getElementById("saleButton"),saleItems=[];let lookupSequence=0,barcodeError=false,selectedIndex=-1,saleSaving=false;
+function updateTotals(){count.textContent=String(saleItems.length);sum.textContent=saleItems.reduce((t,i)=>t+Number(i.sell_price||0),0).toFixed(2);saleButton.disabled=saleItems.length===0||saleSaving}function drawSaleTable(){itemsBody.innerHTML=saleItems.map((p,i)=>`<tr data-index="${i}" class="${selectedIndex===i?"selected":""}"><td>${escapeHtml(p.barcode)}</td><td>${escapeHtml(p.name)}</td><td>${Number(p.sell_price||0).toFixed(2)}</td></tr>`).join("");updateTotals()}function cancelSelection(){selectedIndex=-1;drawSaleTable()}function deleteSelected(){if(selectedIndex<0)return;saleItems.splice(selectedIndex,1);cancelSelection()}function setSaleLocked(locked){saleButton.disabled=locked||saleItems.length===0||saleSaving;backButton.disabled=locked;barcode.disabled=locked;docDate.disabled=locked||!canChangeDate}function closePricePanel(){document.getElementById("pricePanel")?.classList.remove("show","keyboardOpen");selectedIndex=-1;drawSaleTable();setSaleLocked(false)}function savePrice(){if(selectedIndex<0)return;const input=document.getElementById("newPrice"),price=Number(input.value);if(!Number.isFinite(price)||price<=0)return;saleItems[selectedIndex].sell_price=price;drawSaleTable()}function changePrice(){if(selectedIndex<0)return;const input=document.getElementById("newPrice"),panel=document.getElementById("pricePanel");input.value=saleItems[selectedIndex].sell_price;panel.classList.add("show","keyboardOpen");setSaleLocked(true);showKeyboard(input,{onEnter:savePrice,onClose:closePricePanel})}
+itemsBody.addEventListener("click",event=>{if(!hasPermission("sale.item.select")||saleSaving||document.getElementById("keyboard")?.classList.contains("show"))return;const row=event.target.closest("tr[data-index]");if(!row)return;selectedIndex=Number(row.dataset.index);drawSaleTable();setTimeout(()=>showChoice("Выберите действие",[["Изменить цену",changePrice],["Удалить товар",()=>showConfirm("Удалить товар?","Выбранный товар будет удалён",deleteSelected,cancelSelection)],["Отмена",cancelSelection]]),200)});
+function resetBarcodeError(){if(!barcodeError)return;barcodeError=false;barcode.value="";barcode.classList.remove("saleBarcodeNotFound")}async function lookupBarcode(){const code=barcode.value.trim();if(code.length!==5)return;hideKeyboard();const sequence=++lookupSequence,result=await getProductByBarcode(code);if(sequence!==lookupSequence)return;if(!result.success){barcodeError=true;barcode.value="Код не найден";barcode.classList.add("saleBarcodeNotFound");return}saleItems.push(result.data);drawSaleTable();barcode.value="";barcode.classList.remove("saleBarcodeNotFound")}barcode.addEventListener("input",()=>{if(barcodeError)return;if(barcode.value.length>5)barcode.value=barcode.value.slice(0,5);if(barcode.value.length===5)lookupBarcode()});barcode.addEventListener("click",()=>{if(saleSaving)return;resetBarcodeError();showKeyboard(barcode)});
+async function saveSale(){if(saleSaving||saleItems.length===0)return;const now=new Date(),saleDoc={sale_date:docDate.value,sale_time:now.toLocaleTimeString("ru-RU",{hour12:false}),items:saleItems.map(i=>({barcode:Number(i.barcode),name:i.name,buy_price:Number(i.buy_price||0),sell_price:Number(i.sell_price||0)}))};saleSaving=true;setSaleLocked(true);let result;try{result=await createSale(saleDoc)}catch{result={success:false,error:{message:"Нет связи с сервером"}}}if(!result.success){saleSaving=false;setSaleLocked(false);showMessage("Ошибка продажи",result.error?.message||"Ошибка сохранения продажи");return}const saleId=result.data?.id;saleItems.length=0;selectedIndex=-1;barcode.value="";barcodeError=false;barcode.classList.remove("saleBarcodeNotFound");docDate.value=today();saleSaving=false;drawSaleTable();setSaleLocked(false);showMessage("Продажа выполнена",saleId?`Документ № ${saleId}`:"Продажа сохранена")}
+saleButton.addEventListener("click",saveSale);backButton.addEventListener("click",()=>{hideKeyboard();showHome()});drawSaleTable()}
+function showIncome(){app.innerHTML=`<main class="sale-page document-page"><button id="incomeBackButton" class="back-button" type="button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">Создание товара</h2></div><div class="productForm"><div class="formGroup"><label class="formLabel">Наименование</label><input id="productName" class="productInput" type="text"></div><div class="productPrices"><div class="formGroup"><label class="formLabel">Закупочная цена</label><input id="productBuyPrice" class="productInput" readonly></div><div class="formGroup"><label class="formLabel">Цена продажи</label><input id="productSellPrice" class="productInput" readonly></div></div></div>${keyboardHtml()}</main>`;initKeyboard();document.getElementById("productBuyPrice").addEventListener("click",e=>showKeyboard(e.currentTarget));document.getElementById("productSellPrice").addEventListener("click",e=>showKeyboard(e.currentTarget));document.getElementById("incomeBackButton").addEventListener("click",showHome)}function documentListPage({id,title,columns}){return`<main class="sale-page document-page"><button id="${id}BackButton" class="back-button">← Назад</button><div class="saleHeader"><h2 class="saleTitle">${title}</h2></div><table class="saleTable"><thead><tr>${columns.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody></tbody></table></main>`}function showJournal(){app.innerHTML=documentListPage({id:"journal",title:"Журнал продаж",columns:["Дата","Документ","Сумма"]});document.getElementById("journalBackButton").addEventListener("click",showHome)}function showReport(){app.innerHTML=documentListPage({id:"report",title:"Отчет продаж",columns:["ДОК","ТОВАР","ПРОД"]});document.getElementById("reportBackButton").addEventListener("click",showHome)}function showLog(){app.innerHTML=documentListPage({id:"log",title:"Журнал событий",columns:["Дата","Событие","Описание"]});document.getElementById("logBackButton").addEventListener("click",showHome)}async function start(){try{const me=await authMe();if(me.success){currentUser=me.data;showHome();return}}catch{}showLogin()}start();
