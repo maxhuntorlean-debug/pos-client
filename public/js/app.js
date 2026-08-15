@@ -88,15 +88,19 @@ function showHome() {
       </header>
       <section class="menu">
         ${menuItem("sale.create", "💰 Реализация", "sale")}
-        ${menuItem("product.create", "📦 Приход")}
-        ${menuItem("journal.read", "📋 Журнал реализации")}
-        ${menuItem("report.read", "∑ Отчёт продаж")}
-        ${menuItem("event.read", "🕘 Журнал событий")}
+        ${menuItem("product.create", "📦 Приход", "income")}
+        ${menuItem("journal.read", "📋 Журнал реализации", "journal")}
+        ${menuItem("report.read", "∑ Отчёт продаж", "report")}
+        ${menuItem("event.read", "🕘 Журнал событий", "log")}
         <button id="logoutButton" class="menu-item logout" type="button">🚪 Выйти</button>
       </section>
     </main>`;
 
   app.querySelector('[data-action="sale"]')?.addEventListener("click", showSale);
+  app.querySelector('[data-action="income"]')?.addEventListener("click", showIncome);
+  app.querySelector('[data-action="journal"]')?.addEventListener("click", showJournal);
+  app.querySelector('[data-action="report"]')?.addEventListener("click", showReport);
+  app.querySelector('[data-action="log"]')?.addEventListener("click", showLog);
   document.getElementById("logoutButton").addEventListener("click", async () => {
     try { await authLogout(); } finally { currentUser = null; showLogin(); }
   });
@@ -136,6 +140,78 @@ function showSale() {
   const barcode = document.getElementById("saleBarcode");
   barcode.addEventListener("click", () => showKeyboard(barcode));
   document.getElementById("saleBackButton").addEventListener("click", showHome);
+}
+
+function showIncome() {
+  app.innerHTML = `
+    <main class="sale-page document-page">
+      <button id="incomeBackButton" class="back-button" type="button">← Назад</button>
+      <div class="saleHeader"><h2 class="saleTitle">Создание товара</h2></div>
+      <div class="productForm">
+        <div class="formGroup">
+          <label class="formLabel" for="productName">Наименование</label>
+          <div class="productNameRow">
+            <input id="productName" class="productInput" type="text" placeholder="Введите наименование" autocomplete="off">
+            <button class="productMicButton" type="button" disabled>🎤</button>
+          </div>
+        </div>
+        <div class="productPrices">
+          <div class="formGroup">
+            <label class="formLabel" for="productBuyPrice">Закупочная цена</label>
+            <input id="productBuyPrice" class="productInput productPriceInput" type="text" inputmode="none" placeholder="0.00" readonly>
+          </div>
+          <div class="formGroup">
+            <label class="formLabel" for="productSellPrice">Цена продажи</label>
+            <input id="productSellPrice" class="productInput productPriceInput" type="text" inputmode="none" placeholder="0.00" readonly>
+          </div>
+        </div>
+        <button class="productCreateButton" type="button" disabled>Создать товар</button>
+      </div>
+      ${keyboardHtml()}
+    </main>`;
+
+  initKeyboard();
+  document.getElementById("productBuyPrice").addEventListener("click", event => showKeyboard(event.currentTarget));
+  document.getElementById("productSellPrice").addEventListener("click", event => showKeyboard(event.currentTarget));
+  document.getElementById("incomeBackButton").addEventListener("click", showHome);
+}
+
+function documentListPage({ id, title, columns, footer = "" }) {
+  return `
+    <main class="sale-page document-page">
+      <button id="${id}BackButton" class="back-button" type="button">← Назад</button>
+      <div class="saleHeader"><h2 class="saleTitle">${title}</h2></div>
+      <div class="journalFilter">
+        <input type="date" class="saleDate" value="${today()}">
+        <input type="date" class="saleDate" value="${today()}">
+      </div>
+      <button class="saleButton documentShowButton" type="button" disabled>Показать</button>
+      <table class="saleTable">
+        <thead><tr>${columns.map(column => `<th>${column}</th>`).join("")}</tr></thead>
+        <tbody></tbody>
+        ${footer}
+      </table>
+    </main>`;
+}
+
+function showJournal() {
+  app.innerHTML = documentListPage({ id: "journal", title: "Журнал продаж", columns: ["Дата", "Документ", "Сумма"] });
+  document.getElementById("journalBackButton").addEventListener("click", showHome);
+}
+
+function showReport() {
+  app.innerHTML = documentListPage({
+    id: "report",
+    title: "Отчет продаж",
+    columns: ["ДОК", "ТОВАР", "ПРОД"],
+    footer: '<tfoot><tr><th colspan="2">ИТОГО</th><th>0.00</th></tr></tfoot>'
+  });
+  document.getElementById("reportBackButton").addEventListener("click", showHome);
+}
+
+function showLog() {
+  app.innerHTML = documentListPage({ id: "log", title: "Журнал событий", columns: ["Дата", "Событие", "Описание"] });
+  document.getElementById("logBackButton").addEventListener("click", showHome);
 }
 
 async function start() {
