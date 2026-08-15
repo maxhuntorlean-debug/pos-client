@@ -18,7 +18,7 @@ async function request(path, options = {}) {
   }
 
   if (data && typeof data === "object") {
-    if (data.ok === true) {
+    if (data.ok === true || data.success === true) {
       return {
         success: true,
         data: data.user ?? data.data ?? data
@@ -54,4 +54,8 @@ export function authMe() {
 
 export function authLogout() {
   return request("/api/auth/logout", { method: "POST" });
+}
+
+export function getProductByBarcode(barcode) {
+  return request(`/api/products/${encodeURIComponent(barcode)}`);
 }
