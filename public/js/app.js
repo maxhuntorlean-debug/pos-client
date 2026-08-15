@@ -91,7 +91,6 @@ function showHome() {
         ${menuItem("journal.read", "📋 Журнал реализации")}
         ${menuItem("report.read", "∑ Отчёт продаж")}
         ${menuItem("event.read", "🕘 Журнал событий")}
-        ${menuItem("admin.access", "👤 Пользователи")}
         <button id="logoutButton" class="menu-item logout" type="button">🚪 Выйти</button>
       </section>
     </main>`;
