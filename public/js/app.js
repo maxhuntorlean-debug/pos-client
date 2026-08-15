@@ -122,7 +122,10 @@ function showSale() {
 
       <div class="saleHeader">
         <h2 class="saleTitle">Реализация</h2>
-        <input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}>
+        <div class="saleDateRow">
+          ${canChangeDate ? "" : '<span class="saleDateLock" title="Изменение даты запрещено" aria-label="Дата заблокирована">🔒</span>'}
+          <input type="date" id="docDate" class="saleDate" value="${today()}" ${canChangeDate ? "" : "disabled"}>
+        </div>
       </div>
 
       <div class="saleBarcodeRow">
