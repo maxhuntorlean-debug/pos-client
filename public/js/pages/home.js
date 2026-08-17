@@ -163,6 +163,11 @@ export function showHome(
           "cashElitka"
         )}
 
+        ${menuItem(
+          "cash.elitka.report",
+          "∑ Отчёт Элитка",
+           "cashElitkaReport"
+        )}
 
         <button
           id="logoutButton"
@@ -252,6 +257,15 @@ export function showHome(
     );
 
 
+
+    app
+  .querySelector(
+    '[data-action="cashElitkaReport"]'
+  )
+  ?.addEventListener(
+    "click",
+    routes.cashElitkaReport
+  );
   // ====================================================
   // LOGOUT
   // ====================================================

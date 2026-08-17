@@ -9,6 +9,7 @@ import { showSaleDocument } from "./pages/saleDocument.js";
 
 import { showCash } from "./pages/cash.js";
 import { showCashDocument } from "./pages/cashDocument.js";
+import { showCashReport } from "./pages/cashReport.js";
 
 
 let app = null;
@@ -75,6 +76,9 @@ export function navigate(route, params = {}) {
 
         cashElitka: () =>
           navigate("cashElitka"),
+
+        cashElitkaReport: () =>
+          navigate("cashElitkaReport"),
       });
       break;
 
@@ -211,7 +215,16 @@ export function navigate(route, params = {}) {
     "Касса Элитка"
   );
   break;
+// --------------------------------------------------
+// CASH ELITKA REPORT
+// --------------------------------------------------
 
+case "cashElitkaReport":
+  showCashReport(
+    app,
+    () => navigate("home")
+  );
+  break;
 
   case "cashDocument":
   showCashDocument(

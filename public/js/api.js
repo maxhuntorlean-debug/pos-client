@@ -261,3 +261,23 @@ export function deleteCashOperation(
     }
   );
 }
+
+// ======================================================
+// CASH REPORT
+// ======================================================
+
+export function getCashReport(
+  cashType,
+  from,
+  to
+) {
+  return request(
+    `/api/cash/${encodeURIComponent(
+      cashType
+    )}/report?from=${encodeURIComponent(
+      from
+    )}&to=${encodeURIComponent(
+      to
+    )}`
+  );
+}

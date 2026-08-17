@@ -56,6 +56,7 @@ public/
     pages/
       cash.js
       cashDocument.js
+      cashReport.js
       home.js
       income.js
       journal.js
@@ -78,12 +79,962 @@ wrangler.jsonc
 <files>
 This section contains the contents of the repository's files.
 
+<file path="public/js/pages/cashReport.js">
+import {
+  getCashReport,
+} from "../api.js";
+
+import {
+  dialogsHtml,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  escapeHtml,
+  formatDate,
+  today,
+} from "../state.js";
+
+
+// ======================================================
+// ELITKA OPERATION LABELS
+// ======================================================
+
+const OPERATION_LABELS = {
+  SALES: "Реализация",
+  TERMINAL: "Терминал",
+  WITHDRAWAL: "Съём",
+  SUGAR: "Расход сахар и пр.",
+  OTHER: "Расход прочие",
+  SALARY: "Зарплата",
+};
+
+
+// ======================================================
+// ELITKA OPERATION ORDER
+// ======================================================
+
+const OPERATION_ORDER = [
+  "SALES",
+  "TERMINAL",
+  "WITHDRAWAL",
+  "SUGAR",
+  "OTHER",
+  "SALARY",
+];
+
+
+// ======================================================
+// MONTH PERIOD
+// ======================================================
+
+function getCurrentMonthPeriod() {
+
+  // today() уже возвращает дату по Europe/Kyiv
+
+  const current =
+    today();
+
+  const [
+    year,
+    month,
+  ] =
+    current.split("-");
+
+
+  const firstDay =
+    `${year}-${month}-01`;
+
+
+  const lastDayNumber =
+    new Date(
+      Number(year),
+      Number(month),
+      0
+    ).getDate();
+
+
+  const lastDay =
+    `${year}-${month}-${String(
+      lastDayNumber
+    ).padStart(2, "0")}`;
+
+
+  return {
+    from: firstDay,
+    to: lastDay,
+  };
+}
+
+
+// ======================================================
+// MONEY
+// ======================================================
+
+function money(value) {
+
+  const number =
+    Number(value);
+
+
+  if (!Number.isFinite(number)) {
+    return "0.00";
+  }
+
+
+  return number.toLocaleString(
+    "ru-RU",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
+}
+
+
+// ======================================================
+// SIGNED MONEY
+// ======================================================
+
+function signedMoney(value) {
+
+  const number =
+    Number(value);
+
+
+  if (!Number.isFinite(number)) {
+    return "0.00";
+  }
+
+
+  if (number > 0) {
+
+    return `+${money(number)}`;
+
+  }
+
+
+  if (number < 0) {
+
+    return `−${money(
+      Math.abs(number)
+    )}`;
+
+  }
+
+
+  return money(0);
+}
+
+
+// ======================================================
+// PAGE
+// ======================================================
+
+export function showCashReport(
+  app,
+  showHome
+) {
+
+  const period =
+    getCurrentMonthPeriod();
+
+
+  // ====================================================
+  // PAGE
+  // ====================================================
+
+  app.innerHTML = `
+    <main
+      class="sale-page document-page cashReportPage"
+    >
+
+      <button
+        id="cashReportBack"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+
+      <div class="saleHeader">
+
+        <h2 class="saleTitle">
+          Отчёт Элитка
+        </h2>
+
+      </div>
+
+
+      <!-- =============================================
+           PERIOD
+           ============================================= -->
+
+      <div class="cashReportPeriod">
+
+        <label class="cashReportDateField">
+
+          <span>
+            С
+          </span>
+
+          <input
+            id="cashReportFrom"
+            class="saleDate"
+            type="date"
+            value="${period.from}"
+          >
+
+        </label>
+
+
+        <label class="cashReportDateField">
+
+          <span>
+            По
+          </span>
+
+          <input
+            id="cashReportTo"
+            class="saleDate"
+            type="date"
+            value="${period.to}"
+          >
+
+        </label>
+
+      </div>
+
+
+      <button
+        id="cashReportShow"
+        class="saleButton documentShowButton"
+        type="button"
+      >
+        Показать
+      </button>
+
+
+      <!-- =============================================
+           REPORT
+           ============================================= -->
+
+      <div
+        id="cashReportContent"
+        class="cashReportContent"
+      ></div>
+
+
+      <!-- =============================================
+           LOADING
+           ============================================= -->
+
+      <div
+        id="cashReportLoading"
+        class="loadingOverlay"
+        aria-hidden="true"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+
+      ${dialogsHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const back =
+    document.getElementById(
+      "cashReportBack"
+    );
+
+
+  const from =
+    document.getElementById(
+      "cashReportFrom"
+    );
+
+
+  const to =
+    document.getElementById(
+      "cashReportTo"
+    );
+
+
+  const showButton =
+    document.getElementById(
+      "cashReportShow"
+    );
+
+
+  const content =
+    document.getElementById(
+      "cashReportContent"
+    );
+
+
+  const loading =
+    document.getElementById(
+      "cashReportLoading"
+    );
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  let busy =
+    false;
+
+
+  // ====================================================
+  // BUSY
+  // ====================================================
+
+  function setBusy(value) {
+
+    busy =
+      value;
+
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+
+    loading.setAttribute(
+      "aria-hidden",
+      value
+        ? "false"
+        : "true"
+    );
+
+
+    showButton.disabled =
+      value;
+
+
+    from.disabled =
+      value;
+
+
+    to.disabled =
+      value;
+
+
+    back.disabled =
+      value;
+  }
+
+
+  // ====================================================
+  // NORMALIZE GROUPS
+  // ====================================================
+
+  function normalizeGroups(groups) {
+
+    const source =
+      Array.isArray(groups)
+        ? groups
+        : [];
+
+
+    const map =
+      new Map();
+
+
+    for (const group of source) {
+
+      map.set(
+        String(
+          group.operation_type ||
+          ""
+        ),
+        group
+      );
+
+    }
+
+
+    // Показываем все известные группы,
+    // даже если за период сумма равна нулю.
+
+    const result =
+      OPERATION_ORDER.map(
+        (operationType) => {
+
+          const group =
+            map.get(
+              operationType
+            );
+
+
+          return {
+            operation_type:
+              operationType,
+
+            total:
+              Number(
+                group?.total || 0
+              ),
+
+            operations:
+              Array.isArray(
+                group?.operations
+              )
+                ? group.operations
+                : [],
+          };
+
+        }
+      );
+
+
+    // Если когда-нибудь сервер отдаст
+    // новый неизвестный тип операции,
+    // мы его тоже не потеряем.
+
+    for (const group of source) {
+
+      const operationType =
+        String(
+          group.operation_type ||
+          ""
+        );
+
+
+      if (
+        !OPERATION_ORDER.includes(
+          operationType
+        )
+      ) {
+
+        result.push({
+          operation_type:
+            operationType,
+
+          total:
+            Number(
+              group.total || 0
+            ),
+
+          operations:
+            Array.isArray(
+              group.operations
+            )
+              ? group.operations
+              : [],
+        });
+
+      }
+
+    }
+
+
+    return result;
+  }
+
+
+  // ====================================================
+  // DRAW OPERATION
+  // ====================================================
+
+  function operationHtml(
+    operation
+  ) {
+
+    const amount =
+      Number(
+        operation.amount || 0
+      );
+
+
+    const comment =
+      String(
+        operation.comment ||
+        ""
+      ).trim();
+
+
+    return `
+      <div class="cashReportOperation">
+
+        <div class="cashReportOperationMain">
+
+          <span class="cashReportOperationDate">
+            ${escapeHtml(
+              formatDate(
+                operation.date
+              )
+            )}
+          </span>
+
+
+          <strong
+            class="${
+              amount < 0
+                ? "cashNegative"
+                : "cashPositive"
+            }"
+          >
+            ${escapeHtml(
+              signedMoney(
+                amount
+              )
+            )}
+          </strong>
+
+        </div>
+
+
+        ${
+          comment
+
+            ? `
+              <div class="cashReportOperationComment">
+                ${escapeHtml(
+                  comment
+                )}
+              </div>
+            `
+
+            : ""
+        }
+
+      </div>
+    `;
+  }
+
+
+  // ====================================================
+  // DRAW GROUP
+  // ====================================================
+
+  function groupHtml(group) {
+
+    const operationType =
+      String(
+        group.operation_type ||
+        ""
+      );
+
+
+    const label =
+      OPERATION_LABELS[
+        operationType
+      ] ||
+      operationType ||
+      "Операция";
+
+
+    const total =
+      Number(
+        group.total || 0
+      );
+
+
+    const operations =
+      Array.isArray(
+        group.operations
+      )
+        ? group.operations
+        : [];
+
+
+    return `
+      <div
+        class="cashReportGroup"
+        data-report-group="${escapeHtml(
+          operationType
+        )}"
+      >
+
+        <button
+          class="cashReportGroupHeader"
+          type="button"
+        >
+
+          <span class="cashReportGroupLeft">
+
+            <span class="cashReportArrow">
+              ▶
+            </span>
+
+            <span>
+              ${escapeHtml(label)}
+            </span>
+
+          </span>
+
+
+          <strong
+            class="${
+              total < 0
+                ? "cashNegative"
+                : total > 0
+                  ? "cashPositive"
+                  : ""
+            }"
+          >
+            ${escapeHtml(
+              signedMoney(
+                total
+              )
+            )}
+          </strong>
+
+        </button>
+
+
+        <div
+          class="cashReportGroupDetails"
+          hidden
+        >
+
+          ${
+            operations.length
+
+              ? operations
+                  .map(
+                    operationHtml
+                  )
+                  .join("")
+
+              : `
+                <div class="cashReportEmpty">
+                  Нет операций
+                </div>
+              `
+          }
+
+        </div>
+
+      </div>
+    `;
+  }
+
+
+  // ====================================================
+  // DRAW REPORT
+  // ====================================================
+
+  function drawReport(data) {
+
+    const openingBalance =
+      Number(
+        data?.opening_balance || 0
+      );
+
+
+    const closingBalance =
+      Number(
+        data?.closing_balance || 0
+      );
+
+
+    const groups =
+      normalizeGroups(
+        data?.groups
+      );
+
+
+    content.innerHTML = `
+
+      <!-- =============================================
+           OPENING BALANCE
+           ============================================= -->
+
+      <div class="cashReportBalance cashReportOpening">
+
+        <span>
+          Остаток на начало
+        </span>
+
+        <strong>
+          ${escapeHtml(
+            money(
+              openingBalance
+            )
+          )}
+        </strong>
+
+      </div>
+
+
+      <!-- =============================================
+           GROUPS
+           ============================================= -->
+
+      <div class="cashReportGroups">
+
+        ${groups
+          .map(
+            groupHtml
+          )
+          .join("")}
+
+      </div>
+
+
+      <!-- =============================================
+           CLOSING BALANCE
+           ============================================= -->
+
+      <div class="cashReportBalance cashReportClosing">
+
+        <span>
+          Остаток на конец
+        </span>
+
+        <strong>
+          ${escapeHtml(
+            money(
+              closingBalance
+            )
+          )}
+        </strong>
+
+      </div>
+
+    `;
+
+
+    // ==================================================
+    // ACCORDION
+    // ==================================================
+
+    content
+      .querySelectorAll(
+        ".cashReportGroup"
+      )
+      .forEach(
+        (group) => {
+
+          const header =
+            group.querySelector(
+              ".cashReportGroupHeader"
+            );
+
+
+          const details =
+            group.querySelector(
+              ".cashReportGroupDetails"
+            );
+
+
+          const arrow =
+            group.querySelector(
+              ".cashReportArrow"
+            );
+
+
+          header.addEventListener(
+            "click",
+            () => {
+
+              const open =
+                !details.hidden;
+
+
+              details.hidden =
+                open;
+
+
+              arrow.textContent =
+                open
+                  ? "▶"
+                  : "▼";
+
+            }
+          );
+
+        }
+      );
+  }
+
+
+  // ====================================================
+  // LOAD REPORT
+  // ====================================================
+
+  async function loadReport() {
+
+    if (busy) {
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // VALIDATION
+    // --------------------------------------------------
+
+    if (
+      !from.value ||
+      !to.value
+    ) {
+
+      showMessage(
+        "Отчёт Элитка",
+        "Выберите период"
+      );
+
+      return;
+    }
+
+
+    if (
+      from.value >
+      to.value
+    ) {
+
+      showMessage(
+        "Отчёт Элитка",
+        "Некорректный период"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // LOADING
+    // --------------------------------------------------
+
+    setBusy(true);
+
+
+    let result;
+
+
+    try {
+
+      result =
+        await getCashReport(
+          "ELITKA",
+          from.value,
+          to.value
+        );
+
+    } catch {
+
+      result = {
+        success: false,
+
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    setBusy(false);
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    if (!result.success) {
+
+      showMessage(
+        "Ошибка отчёта",
+        result.error?.message ||
+          "Не удалось загрузить отчёт Элитки"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // DRAW
+    // --------------------------------------------------
+
+    drawReport(
+      result.data || {}
+    );
+  }
+
+
+  // ====================================================
+  // EVENTS
+  // ====================================================
+
+  back.addEventListener(
+    "click",
+    showHome
+  );
+
+
+  showButton.addEventListener(
+    "click",
+    loadReport
+  );
+
+
+  // При смене периода пока автоматически
+  // запрос не отправляем.
+  // Пользователь нажимает "Показать".
+
+
+  // ====================================================
+  // FIRST LOAD
+  // ====================================================
+
+  loadReport();
+}
+</file>
+
 <file path=".wrangler/cache/wrangler-account.json">
 {
   "account": {
     "id": "8f027d102ccd00f22e6bcce4432eb919",
     "name": "Lateshoy@gmail.com's Account"
   }
+}
+</file>
+
+<file path="public/assets/.gitkeep">
+
+</file>
+
+<file path="public/js/components/dialogs.js">
+export function dialogsHtml() {
+  return `
+    <div id="choiceOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="choiceTitle" class="dialogTitle"></div><div id="choiceButtons" class="dialogButtons"></div></div></div>
+    <div id="confirmOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="confirmTitle" class="dialogTitle"></div><div id="confirmText" class="dialogText"></div><div class="dialogButtons dialogButtonsRow"><button id="confirmYes" class="dialogButton" type="button">Да</button><button id="confirmNo" class="dialogButton" type="button">Нет</button></div></div></div>
+    <div id="messageOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="messageTitle" class="dialogTitle"></div><div id="messageText" class="dialogText"></div><div class="dialogButtons"><button id="messageOk" class="dialogButton" type="button">OK</button></div></div></div>`;
+}
+
+export function showChoice(title, choices) {
+  const overlay = document.getElementById("choiceOverlay"), titleElement = document.getElementById("choiceTitle"), buttons = document.getElementById("choiceButtons"); if (!overlay || !titleElement || !buttons) return;
+  titleElement.textContent = title; buttons.innerHTML = "";
+  choices.forEach(([text, action]) => { const button = document.createElement("button"); button.type = "button"; button.className = "dialogButton"; button.textContent = text; button.addEventListener("click", () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); if (typeof action === "function") action(); }); buttons.appendChild(button); });
+  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
+}
+
+export function showConfirm(title, text, onYes, onNo = null) {
+  const overlay = document.getElementById("confirmOverlay"), titleElement = document.getElementById("confirmTitle"), textElement = document.getElementById("confirmText"), yes = document.getElementById("confirmYes"), no = document.getElementById("confirmNo"); if (!overlay || !titleElement || !textElement || !yes || !no) return;
+  titleElement.textContent = title; textElement.textContent = text;
+  const close = () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); };
+  yes.onclick = () => { close(); if (typeof onYes === "function") onYes(); }; no.onclick = () => { close(); if (typeof onNo === "function") onNo(); };
+  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
+}
+
+export function showMessage(title, text, onOk = null) {
+  const overlay = document.getElementById("messageOverlay"), titleElement = document.getElementById("messageTitle"), textElement = document.getElementById("messageText"), ok = document.getElementById("messageOk"); if (!overlay || !titleElement || !textElement || !ok) return;
+  titleElement.textContent = title; textElement.textContent = text;
+  ok.onclick = () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); if (typeof onOk === "function") onOk(); };
+  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
 }
 </file>
 
@@ -122,13 +1073,38 @@ export function showCash(
   // PERMISSIONS
   // ====================================================
 
-  const editPermission =
+  const permissionPrefix =
     cashType === "KOTOPANDA"
-      ? "cash.kotopanda.edit"
-      : "cash.elitka.edit";
+      ? "cash.kotopanda"
+      : "cash.elitka";
+
+
+  // ----------------------------------------------------
+  // TODAY
+  //
+  // .today или .edit
+  // ----------------------------------------------------
+
+  const canEditToday =
+    hasPermission(
+      `${permissionPrefix}.today`
+    ) ||
+    hasPermission(
+      `${permissionPrefix}.edit`
+    );
+
+
+  // ----------------------------------------------------
+  // HISTORY
+  //
+  // Только .edit
+  // ----------------------------------------------------
 
   const canEditHistory =
-    hasPermission(editPermission);
+    hasPermission(
+      `${permissionPrefix}.edit`
+    );
+
 
   const currentDate =
     today();
@@ -139,7 +1115,9 @@ export function showCash(
   // ====================================================
 
   app.innerHTML = `
-    <main class="sale-page document-page cashPage">
+    <main
+      class="sale-page document-page cashPage"
+    >
 
       <button
         id="cashBackButton"
@@ -159,17 +1137,34 @@ export function showCash(
       </div>
 
 
-      <table class="saleTable cashTable">
+      <table
+        class="saleTable cashTable"
+      >
 
         <thead>
+
           <tr>
-            <th>Дата</th>
-            <th>Документ</th>
-            <th>Остаток</th>
+
+            <th>
+              Дата
+            </th>
+
+            <th>
+              Документ
+            </th>
+
+            <th>
+              Остаток
+            </th>
+
           </tr>
+
         </thead>
 
-        <tbody id="cashRows"></tbody>
+
+        <tbody
+          id="cashRows"
+        ></tbody>
 
       </table>
 
@@ -184,7 +1179,9 @@ export function showCash(
       </button>
 
 
-      <!-- DATE DIALOG -->
+      <!-- =============================================
+           DATE DIALOG
+           ============================================= -->
 
       <div
         id="cashDateDialog"
@@ -222,6 +1219,7 @@ export function showCash(
               Отмена
             </button>
 
+
             <button
               id="cashDateCreate"
               class="cashModalOk"
@@ -237,7 +1235,9 @@ export function showCash(
       </div>
 
 
-      <!-- LOADING -->
+      <!-- =============================================
+           LOADING
+           ============================================= -->
 
       <div
         id="cashLoading"
@@ -263,15 +1263,18 @@ export function showCash(
       "cashRows"
     );
 
+
   const backButton =
     document.getElementById(
       "cashBackButton"
     );
 
+
   const addButton =
     document.getElementById(
       "cashAddButton"
     );
+
 
   const loading =
     document.getElementById(
@@ -279,22 +1282,27 @@ export function showCash(
     );
 
 
+  // ====================================================
   // DATE DIALOG
+  // ====================================================
 
   const dateDialog =
     document.getElementById(
       "cashDateDialog"
     );
 
+
   const dateInput =
     document.getElementById(
       "cashDocumentDate"
     );
 
+
   const dateCancel =
     document.getElementById(
       "cashDateCancel"
     );
+
 
   const dateCreate =
     document.getElementById(
@@ -310,17 +1318,31 @@ export function showCash(
 
 
   // ====================================================
+  // READ ONLY
+  //
+  // Если нет ни today, ни edit —
+  // кнопку создания документа вообще не показываем.
+  // ====================================================
+
+  addButton.hidden =
+    !canEditToday;
+
+
+  // ====================================================
   // BUSY
   // ====================================================
 
   function setBusy(value) {
 
-    busy = value;
+    busy =
+      value;
+
 
     loading.classList.toggle(
       "show",
       value
     );
+
 
     loading.setAttribute(
       "aria-hidden",
@@ -329,11 +1351,14 @@ export function showCash(
         : "true"
     );
 
+
     addButton.disabled =
       value;
 
+
     backButton.disabled =
       value;
+
 
     dateCreate.disabled =
       value;
@@ -349,11 +1374,13 @@ export function showCash(
     const number =
       Number(value);
 
+
     if (
       !Number.isFinite(number)
     ) {
       return "0.00";
     }
+
 
     return number.toFixed(2);
   }
@@ -368,14 +1395,18 @@ export function showCash(
     if (!data.length) {
 
       rows.innerHTML = `
+
         <tr>
+
           <td
             colspan="3"
             class="cashEmpty"
           >
             Документов пока нет
           </td>
+
         </tr>
+
       `;
 
       return;
@@ -402,11 +1433,13 @@ export function showCash(
                 )}
               </td>
 
+
               <td>
                 №${escapeHtml(
                   document.id
                 )}
               </td>
+
 
               <td>
                 ${escapeHtml(
@@ -423,41 +1456,46 @@ export function showCash(
         .join("");
 
 
-    // --------------------------------------------------
+    // ==================================================
     // OPEN DOCUMENT
-    // --------------------------------------------------
+    // ==================================================
 
     rows
       .querySelectorAll(
         ".cashDocumentRow"
       )
-      .forEach((row) => {
+      .forEach(
+        (row) => {
 
-        row.addEventListener(
-          "click",
-          () => {
+          row.addEventListener(
+            "click",
+            () => {
 
-            const id =
-              Number(
-                row.dataset.id
-              );
+              const id =
+                Number(
+                  row.dataset.id
+                );
 
-            if (
-              Number.isInteger(id) &&
-              id > 0
-            ) {
-              openDocument(id);
+
+              if (
+                Number.isInteger(id) &&
+                id > 0
+              ) {
+
+                openDocument(id);
+
+              }
+
             }
+          );
 
-          }
-        );
-
-      });
+        }
+      );
   }
 
 
   // ====================================================
-  // LOAD
+  // LOAD DOCUMENTS
   // ====================================================
 
   async function loadDocuments() {
@@ -468,6 +1506,7 @@ export function showCash(
 
 
     setBusy(true);
+
 
     let result;
 
@@ -482,12 +1521,14 @@ export function showCash(
     } catch {
 
       result = {
+
         success: false,
 
         error: {
           message:
             "Нет связи с сервером",
         },
+
       };
 
     }
@@ -499,11 +1540,17 @@ export function showCash(
     if (result.success) {
 
       const data =
-        Array.isArray(result.data)
+        Array.isArray(
+          result.data
+        )
           ? result.data
           : [];
 
-      drawDocuments(data);
+
+      drawDocuments(
+        data
+      );
+
 
       return;
     }
@@ -531,12 +1578,36 @@ export function showCash(
 
 
     // --------------------------------------------------
-    // CLIENT VALIDATION
+    // Нет прав даже на сегодняшний день
+    // --------------------------------------------------
+
+    if (!canEditToday) {
+
+      showMessage(
+        cashTitle,
+        "Доступ только для просмотра"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // Определяем дату
+    // --------------------------------------------------
+
+    const documentDate =
+      selectedDate ||
+      currentDate;
+
+
+    // --------------------------------------------------
+    // FUTURE
     // --------------------------------------------------
 
     if (
-      selectedDate &&
-      selectedDate > currentDate
+      documentDate >
+      currentDate
     ) {
 
       showMessage(
@@ -548,7 +1619,33 @@ export function showCash(
     }
 
 
+    // --------------------------------------------------
+    // HISTORY
+    //
+    // Прошлую дату может создавать только .edit
+    // --------------------------------------------------
+
+    if (
+      documentDate <
+        currentDate &&
+      !canEditHistory
+    ) {
+
+      showMessage(
+        cashTitle,
+        "Нет доступа к созданию документов за прошлую дату"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // REQUEST
+    // --------------------------------------------------
+
     setBusy(true);
+
 
     let result;
 
@@ -558,18 +1655,20 @@ export function showCash(
       result =
         await createCashDocument(
           cashType,
-          selectedDate
+          documentDate
         );
 
     } catch {
 
       result = {
+
         success: false,
 
         error: {
           message:
             "Нет связи с сервером",
         },
+
       };
 
     }
@@ -608,11 +1707,10 @@ export function showCash(
 
 
     // --------------------------------------------------
-    // ALREADY EXISTS
+    // DOCUMENT ALREADY EXISTS
     //
-    // Если документ за эту дату уже существует,
-    // API возвращает его id.
-    // Просто открываем его.
+    // Если API вернул id существующего документа,
+    // просто открываем его.
     // --------------------------------------------------
 
     const existingId =
@@ -622,7 +1720,9 @@ export function showCash(
 
 
     if (
-      Number.isInteger(existingId) &&
+      Number.isInteger(
+        existingId
+      ) &&
       existingId > 0
     ) {
 
@@ -647,7 +1747,7 @@ export function showCash(
 
 
   // ====================================================
-  // ADD BUTTON
+  // ADD DOCUMENT
   // ====================================================
 
   function addDocument() {
@@ -658,44 +1758,70 @@ export function showCash(
 
 
     // --------------------------------------------------
-    // WITHOUT EDIT PERMISSION
-    //
-    // Старое поведение:
-    // сразу создаём сегодняшний документ.
+    // VIEW ONLY
     // --------------------------------------------------
 
-    if (!canEditHistory) {
-
-      createDocument();
+    if (!canEditToday) {
 
       return;
     }
 
 
     // --------------------------------------------------
-    // WITH EDIT PERMISSION
+    // FULL EDIT
     //
-    // Показываем выбор даты.
+    // Показываем календарь.
+    // Можно выбрать сегодня или прошлую дату.
     // --------------------------------------------------
 
-    dateInput.value =
-      currentDate;
+    if (canEditHistory) {
 
-    dateDialog.classList.add(
-      "show"
+      dateInput.value =
+        currentDate;
+
+
+      dateDialog.classList.add(
+        "show"
+      );
+
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // TODAY
+    //
+    // Только сегодняшний документ.
+    // Календарь не показываем.
+    // --------------------------------------------------
+
+    createDocument(
+      currentDate
     );
   }
 
 
   // ====================================================
-  // DATE CREATE
+  // CREATE SELECTED DATE
   // ====================================================
 
   function createSelectedDate() {
 
+    if (!canEditHistory) {
+
+      dateDialog.classList.remove(
+        "show"
+      );
+
+      return;
+    }
+
+
     const selectedDate =
       String(
-        dateInput.value || ""
+        dateInput.value ||
+        ""
       ).trim();
 
 
@@ -709,6 +1835,10 @@ export function showCash(
       return;
     }
 
+
+    // --------------------------------------------------
+    // FUTURE
+    // --------------------------------------------------
 
     if (
       selectedDate >
@@ -770,7 +1900,7 @@ export function showCash(
 
 
   // ====================================================
-  // INITIAL
+  // START
   // ====================================================
 
   loadDocuments();
@@ -791,6 +1921,8 @@ import {
 } from "../components/dialogs.js";
 
 import {
+  keyboardHtml,
+  initKeyboard,
   showKeyboard,
   hideKeyboard,
 } from "../components/keyboard.js";
@@ -911,17 +2043,27 @@ export function showCashDocument(
 ) {
 
   // ====================================================
-  // EDIT PERMISSION
+  // PERMISSIONS
   // ====================================================
 
-  const editPermission =
+  const permissionPrefix =
     cashType === "KOTOPANDA"
-      ? "cash.kotopanda.edit"
-      : "cash.elitka.edit";
+      ? "cash.kotopanda"
+      : "cash.elitka";
+
+
+  const canEditToday =
+    hasPermission(
+      `${permissionPrefix}.today`
+    ) ||
+    hasPermission(
+      `${permissionPrefix}.edit`
+    );
+
 
   const canEditHistory =
     hasPermission(
-      editPermission
+      `${permissionPrefix}.edit`
     );
 
 
@@ -930,7 +2072,9 @@ export function showCashDocument(
   // ====================================================
 
   app.innerHTML = `
-    <main class="sale-page document-page cashDocumentPage">
+    <main
+      class="sale-page document-page cashDocumentPage"
+    >
 
       <button
         id="cashDocumentBack"
@@ -950,10 +2094,14 @@ export function showCashDocument(
       </div>
 
 
-      <div id="cashDocumentContent"></div>
+      <div
+        id="cashDocumentContent"
+      ></div>
 
 
-      <!-- ACTION BUTTONS -->
+      <!-- =============================================
+           ACTION BUTTONS
+           ============================================= -->
 
       <div
         id="cashActionButtons"
@@ -969,6 +2117,7 @@ export function showCashDocument(
           +
         </button>
 
+
         <button
           id="cashMinusButton"
           class="cashOperationButton cashMinusButton"
@@ -980,7 +2129,9 @@ export function showCashDocument(
       </div>
 
 
-      <!-- OPERATION TYPE DIALOG -->
+      <!-- =============================================
+           OPERATION TYPE DIALOG
+           ============================================= -->
 
       <div
         id="cashTypeDialog"
@@ -996,10 +2147,12 @@ export function showCashDocument(
             Операция
           </div>
 
+
           <div
             id="cashTypeButtons"
             class="cashTypeButtons"
           ></div>
+
 
           <button
             id="cashTypeCancel"
@@ -1014,7 +2167,9 @@ export function showCashDocument(
       </div>
 
 
-      <!-- AMOUNT DIALOG -->
+      <!-- =============================================
+           AMOUNT DIALOG
+           ============================================= -->
 
       <div
         id="cashAmountDialog"
@@ -1030,11 +2185,6 @@ export function showCashDocument(
             Сумма
           </div>
 
-
-          <!--
-            Системную клавиатуру запрещаем.
-            Поле заполняет наша клавиатура.
-          -->
 
           <input
             id="cashAmountInput"
@@ -1057,6 +2207,7 @@ export function showCashDocument(
               Комментарий
             </div>
 
+
             <input
               id="cashCommentInput"
               class="cashCommentInput"
@@ -1077,6 +2228,7 @@ export function showCashDocument(
               Отмена
             </button>
 
+
             <button
               id="cashAmountOk"
               class="cashModalOk"
@@ -1092,7 +2244,9 @@ export function showCashDocument(
       </div>
 
 
-      <!-- ROW ACTION DIALOG -->
+      <!-- =============================================
+           ROW ACTION DIALOG
+           ============================================= -->
 
       <div
         id="cashRowDialog"
@@ -1105,6 +2259,7 @@ export function showCashDocument(
             Операция
           </div>
 
+
           <div class="cashTypeButtons">
 
             <button
@@ -1115,6 +2270,7 @@ export function showCashDocument(
               Изменить
             </button>
 
+
             <button
               id="cashDeleteButton"
               class="cashTypeButton cashDeleteButton"
@@ -1124,6 +2280,7 @@ export function showCashDocument(
             </button>
 
           </div>
+
 
           <button
             id="cashRowCancel"
@@ -1138,7 +2295,9 @@ export function showCashDocument(
       </div>
 
 
-      <!-- LOADING -->
+      <!-- =============================================
+           LOADING
+           ============================================= -->
 
       <div
         id="cashDocumentLoading"
@@ -1151,8 +2310,17 @@ export function showCashDocument(
 
       ${dialogsHtml()}
 
+      ${keyboardHtml()}
+
     </main>
   `;
+
+
+  // ====================================================
+  // KEYBOARD
+  // ====================================================
+
+  initKeyboard();
 
 
   // ====================================================
@@ -1164,10 +2332,12 @@ export function showCashDocument(
       "cashDocumentBack"
     );
 
+
   const content =
     document.getElementById(
       "cashDocumentContent"
     );
+
 
   const loading =
     document.getElementById(
@@ -1175,17 +2345,21 @@ export function showCashDocument(
     );
 
 
+  // ====================================================
   // ACTION BUTTONS
+  // ====================================================
 
   const actionButtons =
     document.getElementById(
       "cashActionButtons"
     );
 
+
   const plusButton =
     document.getElementById(
       "cashPlusButton"
     );
+
 
   const minusButton =
     document.getElementById(
@@ -1193,22 +2367,27 @@ export function showCashDocument(
     );
 
 
+  // ====================================================
   // TYPE DIALOG
+  // ====================================================
 
   const typeDialog =
     document.getElementById(
       "cashTypeDialog"
     );
 
+
   const typeTitle =
     document.getElementById(
       "cashTypeTitle"
     );
 
+
   const typeButtons =
     document.getElementById(
       "cashTypeButtons"
     );
+
 
   const typeCancel =
     document.getElementById(
@@ -1216,37 +2395,45 @@ export function showCashDocument(
     );
 
 
-  // AMOUNT DIALOG
+  // ====================================================
+  // AMOUNT
+  // ====================================================
 
   const amountDialog =
     document.getElementById(
       "cashAmountDialog"
     );
 
+
   const amountTitle =
     document.getElementById(
       "cashAmountTitle"
     );
+
 
   const amountInput =
     document.getElementById(
       "cashAmountInput"
     );
 
+
   const commentBlock =
     document.getElementById(
       "cashCommentBlock"
     );
+
 
   const commentInput =
     document.getElementById(
       "cashCommentInput"
     );
 
+
   const amountCancel =
     document.getElementById(
       "cashAmountCancel"
     );
+
 
   const amountOk =
     document.getElementById(
@@ -1254,22 +2441,27 @@ export function showCashDocument(
     );
 
 
-  // ROW ACTION DIALOG
+  // ====================================================
+  // ROW ACTIONS
+  // ====================================================
 
   const rowDialog =
     document.getElementById(
       "cashRowDialog"
     );
 
+
   const editButton =
     document.getElementById(
       "cashEditButton"
     );
 
+
   const deleteButton =
     document.getElementById(
       "cashDeleteButton"
     );
+
 
   const rowCancel =
     document.getElementById(
@@ -1281,17 +2473,28 @@ export function showCashDocument(
   // STATE
   // ====================================================
 
-  let documentData = null;
+  let documentData =
+    null;
 
-  let busy = false;
 
-  let selectedDefinition = null;
+  let busy =
+    false;
 
-  let selectedSign = null;
 
-  let selectedOperation = null;
+  let selectedDefinition =
+    null;
 
-  let editMode = false;
+
+  let selectedSign =
+    null;
+
+
+  let selectedOperation =
+    null;
+
+
+  let editMode =
+    false;
 
 
   // ====================================================
@@ -1303,6 +2506,7 @@ export function showCashDocument(
     const number =
       Number(value);
 
+
     return Number.isFinite(number)
       ? number.toFixed(2)
       : "0.00";
@@ -1311,16 +2515,6 @@ export function showCashDocument(
 
   // ====================================================
   // CAN EDIT DOCUMENT
-  //
-  // Сегодня — можно редактировать.
-  //
-  // Прошлая дата:
-  //
-  // KOTOPANDA:
-  // cash.kotopanda.edit
-  //
-  // ELITKA:
-  // cash.elitka.edit
   // ====================================================
 
   function canEditDocument() {
@@ -1330,24 +2524,55 @@ export function showCashDocument(
     }
 
 
-    // Сегодня
+    const documentDate =
+      String(
+        documentData.cash_date ||
+        ""
+      );
+
+
+    // --------------------------------------------------
+    // TODAY
+    //
+    // Нужно .today или .edit
+    // --------------------------------------------------
 
     if (
-      documentData.cash_date ===
+      documentDate ===
       today()
     ) {
-      return true;
+
+      return canEditToday;
+
     }
 
 
-    // Прошлые даты
+    // --------------------------------------------------
+    // HISTORY
+    //
+    // Только .edit
+    // --------------------------------------------------
 
-    return canEditHistory;
+    if (
+      documentDate <
+      today()
+    ) {
+
+      return canEditHistory;
+
+    }
+
+
+    // --------------------------------------------------
+    // FUTURE
+    // --------------------------------------------------
+
+    return false;
   }
 
 
   // ====================================================
-  // FIND OPERATION DEFINITION
+  // FIND DEFINITION
   // ====================================================
 
   function findDefinition(
@@ -1402,7 +2627,8 @@ export function showCashDocument(
 
   function setBusy(value) {
 
-    busy = value;
+    busy =
+      value;
 
 
     loading.classList.toggle(
@@ -1422,17 +2648,22 @@ export function showCashDocument(
     back.disabled =
       value;
 
+
     plusButton.disabled =
       value;
+
 
     minusButton.disabled =
       value;
 
+
     amountOk.disabled =
       value;
 
+
     editButton.disabled =
       value;
+
 
     deleteButton.disabled =
       value;
@@ -1440,7 +2671,7 @@ export function showCashDocument(
 
 
   // ====================================================
-  // RESET SELECTION
+  // RESET
   // ====================================================
 
   function resetSelection() {
@@ -1448,11 +2679,14 @@ export function showCashDocument(
     selectedDefinition =
       null;
 
+
     selectedSign =
       null;
 
+
     selectedOperation =
       null;
+
 
     editMode =
       false;
@@ -1461,18 +2695,22 @@ export function showCashDocument(
     amountInput.value =
       "";
 
+
     commentInput.value =
       "";
   }
 
 
   // ====================================================
-  // CLOSE AMOUNT DIALOG
+  // CLOSE AMOUNT
   // ====================================================
 
   function closeAmountDialog() {
 
     hideKeyboard();
+
+
+    commentInput.blur();
 
 
     amountDialog.classList.remove(
@@ -1485,7 +2723,7 @@ export function showCashDocument(
 
 
   // ====================================================
-  // DRAW DOCUMENT
+  // DRAW
   // ====================================================
 
   function draw() {
@@ -1519,6 +2757,7 @@ export function showCashDocument(
           )}
         </div>
 
+
         <div>
           Документ №${escapeHtml(
             documentData.id
@@ -1536,6 +2775,7 @@ export function showCashDocument(
             Остаток на начало
           </span>
 
+
           <strong>
             ${escapeHtml(
               money(
@@ -1549,7 +2789,9 @@ export function showCashDocument(
       </div>
 
 
-      <table class="saleTable cashOperationsTable">
+      <table
+        class="saleTable cashOperationsTable"
+      >
 
         <thead>
 
@@ -1687,6 +2929,7 @@ export function showCashDocument(
           Остаток
         </span>
 
+
         <strong>
           ${escapeHtml(
             money(
@@ -1701,7 +2944,7 @@ export function showCashDocument(
 
 
     // ==================================================
-    // + / -
+    // EDIT BUTTONS
     // ==================================================
 
     actionButtons.hidden =
@@ -1709,16 +2952,20 @@ export function showCashDocument(
 
 
     // ==================================================
-    // OPERATION ROW EVENTS
+    // ROW EVENTS
     // ==================================================
 
-    if (editable) {
+    if (!editable) {
+      return;
+    }
 
-      content
-        .querySelectorAll(
-          ".cashOperationRow"
-        )
-        .forEach((row) => {
+
+    content
+      .querySelectorAll(
+        ".cashOperationRow"
+      )
+      .forEach(
+        (row) => {
 
           row.addEventListener(
             "click",
@@ -1738,7 +2985,8 @@ export function showCashDocument(
               selectedOperation =
                 operations.find(
                   (item) =>
-                    Number(item.id) === id
+                    Number(item.id) ===
+                    id
                 ) || null;
 
 
@@ -1756,14 +3004,13 @@ export function showCashDocument(
             }
           );
 
-        });
-
-    }
+        }
+      );
   }
 
 
   // ====================================================
-  // LOAD DOCUMENT
+  // LOAD
   // ====================================================
 
   async function load() {
@@ -1889,42 +3136,44 @@ export function showCashDocument(
       .querySelectorAll(
         ".cashTypeButton"
       )
-      .forEach((button) => {
+      .forEach(
+        (button) => {
 
-        button.addEventListener(
-          "click",
-          () => {
+          button.addEventListener(
+            "click",
+            () => {
 
-            const type =
-              button.dataset.type;
-
-
-            selectedDefinition =
-              operations.find(
-                (operation) =>
-                  operation.type ===
-                  type
-              ) || null;
+              const type =
+                button.dataset.type;
 
 
-            if (
-              !selectedDefinition
-            ) {
-              return;
+              selectedDefinition =
+                operations.find(
+                  (operation) =>
+                    operation.type ===
+                    type
+                ) || null;
+
+
+              if (
+                !selectedDefinition
+              ) {
+                return;
+              }
+
+
+              typeDialog.classList.remove(
+                "show"
+              );
+
+
+              openAmountDialog();
+
             }
+          );
 
-
-            typeDialog.classList.remove(
-              "show"
-            );
-
-
-            openAmountDialog();
-
-          }
-        );
-
-      });
+        }
+      );
 
 
     typeDialog.classList.add(
@@ -1934,14 +3183,12 @@ export function showCashDocument(
 
 
   // ====================================================
-  // OPEN AMOUNT DIALOG
+  // OPEN AMOUNT
   // ====================================================
 
   function openAmountDialog() {
 
-    if (
-      !selectedDefinition
-    ) {
+    if (!selectedDefinition) {
       return;
     }
 
@@ -1951,13 +3198,14 @@ export function showCashDocument(
 
 
     // --------------------------------------------------
-    // NEW OPERATION
+    // NEW
     // --------------------------------------------------
 
     if (!editMode) {
 
       amountInput.value =
         "";
+
 
       commentInput.value =
         "";
@@ -1974,7 +3222,7 @@ export function showCashDocument(
 
 
     // --------------------------------------------------
-    // SHOW DIALOG
+    // SHOW
     // --------------------------------------------------
 
     amountDialog.classList.add(
@@ -1982,20 +3230,20 @@ export function showCashDocument(
     );
 
 
-    // --------------------------------------------------
-    // OUR NUMERIC KEYBOARD
-    // --------------------------------------------------
-
-    setTimeout(
+    requestAnimationFrame(
       () => {
 
         amountInput.focus();
 
 
-        // При редактировании выделяем всю сумму.
-        // Первая введённая цифра заменит старое значение.
+        if (
+          editMode &&
+          amountInput.value
+        ) {
 
-        amountInput.select();
+          amountInput.select();
+
+        }
 
 
         showKeyboard(
@@ -2011,14 +3259,50 @@ export function showCashDocument(
           }
         );
 
-      },
-      50
+      }
     );
   }
 
 
   // ====================================================
-  // SAVE OPERATION
+  // SHOW AMOUNT KEYBOARD
+  // ====================================================
+
+  function showAmountKeyboard() {
+
+    if (
+      !amountDialog.classList.contains(
+        "show"
+      )
+    ) {
+      return;
+    }
+
+
+    // Закрываем системную клавиатуру
+
+    commentInput.blur();
+
+
+    // Показываем нашу
+
+    showKeyboard(
+      amountInput,
+      {
+
+        onEnter: () => {
+
+          saveOperation();
+
+        },
+
+      }
+    );
+  }
+
+
+  // ====================================================
+  // SAVE
   // ====================================================
 
   async function saveOperation() {
@@ -2032,16 +3316,14 @@ export function showCashDocument(
     }
 
 
-    // Закрываем нашу цифровую клавиатуру
-
-    hideKeyboard();
-
-
     const amount =
       Number(
         String(
           amountInput.value
-        ).replace(",", ".")
+        ).replace(
+          ",",
+          "."
+        )
       );
 
 
@@ -2061,7 +3343,8 @@ export function showCashDocument(
 
     const comment =
       String(
-        commentInput.value ?? ""
+        commentInput.value ??
+        ""
       ).trim();
 
 
@@ -2070,13 +3353,29 @@ export function showCashDocument(
       !comment
     ) {
 
+      // Чтобы пользователь мог сразу
+      // начать вводить комментарий.
+
+      hideKeyboard();
+
+
+      commentInput.focus();
+
+
       showMessage(
         cashTitle,
         "Введите комментарий"
       );
 
+
       return;
     }
+
+
+    hideKeyboard();
+
+
+    commentInput.blur();
 
 
     amountDialog.classList.remove(
@@ -2092,9 +3391,9 @@ export function showCashDocument(
 
     try {
 
-      // =================================================
+      // ------------------------------------------------
       // UPDATE
-      // =================================================
+      // ------------------------------------------------
 
       if (
         editMode &&
@@ -2123,9 +3422,9 @@ export function showCashDocument(
 
       }
 
-      // =================================================
+      // ------------------------------------------------
       // CREATE
-      // =================================================
+      // ------------------------------------------------
 
       else {
 
@@ -2189,7 +3488,7 @@ export function showCashDocument(
 
 
   // ====================================================
-  // EDIT SELECTED OPERATION
+  // EDIT
   // ====================================================
 
   function editSelected() {
@@ -2213,9 +3512,7 @@ export function showCashDocument(
       );
 
 
-    if (
-      !selectedDefinition
-    ) {
+    if (!selectedDefinition) {
 
       showMessage(
         cashTitle,
@@ -2254,7 +3551,7 @@ export function showCashDocument(
 
 
   // ====================================================
-  // DELETE SELECTED OPERATION
+  // DELETE
   // ====================================================
 
   async function deleteSelected() {
@@ -2350,6 +3647,8 @@ export function showCashDocument(
 
       hideKeyboard();
 
+      commentInput.blur();
+
       goBack();
 
     }
@@ -2397,6 +3696,41 @@ export function showCashDocument(
       );
 
       resetSelection();
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // COMMENT
+  //
+  // При переходе на комментарий
+  // убираем нашу цифровую клавиатуру.
+  // ----------------------------------------------------
+
+  commentInput.addEventListener(
+    "focus",
+    () => {
+
+      hideKeyboard();
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // AMOUNT
+  //
+  // Тапнули обратно по сумме —
+  // закрываем системную клавиатуру
+  // и возвращаем нашу.
+  // ----------------------------------------------------
+
+  amountInput.addEventListener(
+    "click",
+    () => {
+
+      showAmountKeyboard();
 
     }
   );
@@ -2481,6 +3815,16 @@ export function showCashDocument(
   // ====================================================
 
   load();
+}
+</file>
+
+<file path="public/js/pages/login.js">
+import { authLogin, authMe } from "../api.js";
+import { setCurrentUser } from "../state.js";
+export function showLogin(app, showHome){
+  app.innerHTML=`<main class="login-page"><section class="login-card"><div class="login-logo">Котопанда v2+</div><h1>Вход в систему</h1><form id="loginForm" class="login-form"><label>Логин<input name="username" autocomplete="username" required></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><div id="loginError" class="error"></div><button id="loginButton" type="submit">ВОЙТИ</button></form></section></main>`;
+  const form=document.getElementById("loginForm"),error=document.getElementById("loginError"),button=document.getElementById("loginButton");
+  form.addEventListener("submit",async event=>{event.preventDefault();error.textContent="";button.disabled=true;button.textContent="ВХОД...";const data=new FormData(form);try{const login=await authLogin(String(data.get("username")||"").trim(),String(data.get("password")||""));if(!login.success){error.textContent=login.error?.message||"Ошибка авторизации";return}const me=await authMe();if(!me.success){error.textContent=me.error?.message||"Не удалось получить пользователя";return}setCurrentUser(me.data);showHome()}catch{error.textContent="Нет связи с сервером"}finally{button.disabled=false;button.textContent="ВОЙТИ"}});
 }
 </file>
 
@@ -3633,38 +4977,90 @@ export function showSaleDocument(
 }
 </file>
 
-<file path="public/assets/.gitkeep">
-
+<file path="public/manifest.json">
+{
+  "name": "Котопанда POS",
+  "short_name": "Котопанда",
+  "description": "Клиент Котопанда POS",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#4ea6ff",
+  "icons": [
+    {
+      "src": "https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://pos-admin.lateshoy.workers.dev/assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
 </file>
 
-<file path="public/js/components/dialogs.js">
-export function dialogsHtml() {
-  return `
-    <div id="choiceOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="choiceTitle" class="dialogTitle"></div><div id="choiceButtons" class="dialogButtons"></div></div></div>
-    <div id="confirmOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="confirmTitle" class="dialogTitle"></div><div id="confirmText" class="dialogText"></div><div class="dialogButtons dialogButtonsRow"><button id="confirmYes" class="dialogButton" type="button">Да</button><button id="confirmNo" class="dialogButton" type="button">Нет</button></div></div></div>
-    <div id="messageOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="messageTitle" class="dialogTitle"></div><div id="messageText" class="dialogText"></div><div class="dialogButtons"><button id="messageOk" class="dialogButton" type="button">OK</button></div></div></div>`;
-}
+<file path="public/sw.js">
+const CACHE = "kotopanda-pos-v1";
+const APP_SHELL = [
+  "/",
+  "/index.html",
+  "/css/app.css",
+  "/js/app.js",
+  "/js/api.js",
+  "/manifest.json"
+];
 
-export function showChoice(title, choices) {
-  const overlay = document.getElementById("choiceOverlay"), titleElement = document.getElementById("choiceTitle"), buttons = document.getElementById("choiceButtons"); if (!overlay || !titleElement || !buttons) return;
-  titleElement.textContent = title; buttons.innerHTML = "";
-  choices.forEach(([text, action]) => { const button = document.createElement("button"); button.type = "button"; button.className = "dialogButton"; button.textContent = text; button.addEventListener("click", () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); if (typeof action === "function") action(); }); buttons.appendChild(button); });
-  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
-}
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE).then(cache => cache.addAll(APP_SHELL))
+  );
+  self.skipWaiting();
+});
 
-export function showConfirm(title, text, onYes, onNo = null) {
-  const overlay = document.getElementById("confirmOverlay"), titleElement = document.getElementById("confirmTitle"), textElement = document.getElementById("confirmText"), yes = document.getElementById("confirmYes"), no = document.getElementById("confirmNo"); if (!overlay || !titleElement || !textElement || !yes || !no) return;
-  titleElement.textContent = title; textElement.textContent = text;
-  const close = () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); };
-  yes.onclick = () => { close(); if (typeof onYes === "function") onYes(); }; no.onclick = () => { close(); if (typeof onNo === "function") onNo(); };
-  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
-}
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
 
-export function showMessage(title, text, onOk = null) {
-  const overlay = document.getElementById("messageOverlay"), titleElement = document.getElementById("messageTitle"), textElement = document.getElementById("messageText"), ok = document.getElementById("messageOk"); if (!overlay || !titleElement || !textElement || !ok) return;
-  titleElement.textContent = title; textElement.textContent = text;
-  ok.onclick = () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); if (typeof onOk === "function") onOk(); };
-  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
+self.addEventListener("fetch", event => {
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then(response => response || caches.match("/index.html")))
+  );
+});
+</file>
+
+<file path="package.json">
+{
+  "name": "kotopanda-pos-client",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.118.0"
+  }
 }
 </file>
 
@@ -3903,7 +5299,9 @@ export function initKeyboard() {
 </file>
 
 <file path="public/js/pages/home.js">
-import { authLogout } from "../api.js";
+import {
+  authLogout,
+} from "../api.js";
 
 import {
   currentUser,
@@ -3913,11 +5311,16 @@ import {
 } from "../state.js";
 
 
+// ======================================================
+// MENU ITEM
+// ======================================================
+
 function menuItem(
   permission,
   label,
   action = ""
 ) {
+
   if (!hasPermission(permission)) {
     return "";
   }
@@ -3926,7 +5329,11 @@ function menuItem(
     <button
       class="menu-item"
       type="button"
-      ${action ? `data-action="${action}"` : ""}
+      ${
+        action
+          ? `data-action="${action}"`
+          : ""
+      }
     >
       ${label}
     </button>
@@ -3934,7 +5341,64 @@ function menuItem(
 }
 
 
-export function showHome(app, routes) {
+// ======================================================
+// CASH VIEW PERMISSIONS
+// ======================================================
+
+function canViewElitka() {
+
+  return (
+    hasPermission("cash.elitka") ||
+    hasPermission("cash.elitka.today") ||
+    hasPermission("cash.elitka.edit")
+  );
+}
+
+
+function canViewKotopanda() {
+
+  return (
+    hasPermission("cash.kotopanda") ||
+    hasPermission("cash.kotopanda.today") ||
+    hasPermission("cash.kotopanda.edit")
+  );
+}
+
+
+// ======================================================
+// CASH MENU ITEM
+// ======================================================
+
+function cashMenuItem(
+  visible,
+  label,
+  action
+) {
+
+  if (!visible) {
+    return "";
+  }
+
+  return `
+    <button
+      class="menu-item"
+      type="button"
+      data-action="${action}"
+    >
+      ${label}
+    </button>
+  `;
+}
+
+
+// ======================================================
+// HOME
+// ======================================================
+
+export function showHome(
+  app,
+  routes
+) {
 
   app.innerHTML = `
     <main class="home-page">
@@ -3947,7 +5411,8 @@ export function showHome(app, routes) {
 
         <div class="current-user">
           ${escapeHtml(
-            currentUser?.name || "Пользователь"
+            currentUser?.name ||
+            "Пользователь"
           )}
         </div>
 
@@ -3987,18 +5452,23 @@ export function showHome(app, routes) {
         )}
 
 
-        ${menuItem(
-          "cash.kotopanda",
-          "🐼 Касса Котопанда",
+        ${cashMenuItem(
+          canViewKotopanda(),
+          "🧸 Касса Котопанда",
           "cashKotopanda"
         )}
 
-        ${menuItem(
-          "cash.elitka",
+        ${cashMenuItem(
+          canViewElitka(),
           "☕ Касса Элитка",
           "cashElitka"
         )}
 
+        ${menuItem(
+          "cash.elitka.report",
+          "∑ Отчёт Элитка",
+           "cashElitkaReport"
+        )}
 
         <button
           id="logoutButton"
@@ -4015,48 +5485,58 @@ export function showHome(app, routes) {
 
 
   // ====================================================
-  // EXISTING ROUTES
+  // ROUTES
   // ====================================================
 
   app
-    .querySelector('[data-action="sale"]')
+    .querySelector(
+      '[data-action="sale"]'
+    )
     ?.addEventListener(
       "click",
       routes.sale
     );
 
+
   app
-    .querySelector('[data-action="income"]')
+    .querySelector(
+      '[data-action="income"]'
+    )
     ?.addEventListener(
       "click",
       routes.income
     );
 
+
   app
-    .querySelector('[data-action="journal"]')
+    .querySelector(
+      '[data-action="journal"]'
+    )
     ?.addEventListener(
       "click",
       routes.journal
     );
 
+
   app
-    .querySelector('[data-action="report"]')
+    .querySelector(
+      '[data-action="report"]'
+    )
     ?.addEventListener(
       "click",
       routes.report
     );
 
+
   app
-    .querySelector('[data-action="log"]')
+    .querySelector(
+      '[data-action="log"]'
+    )
     ?.addEventListener(
       "click",
       routes.log
     );
 
-
-  // ====================================================
-  // CASH ROUTES
-  // ====================================================
 
   app
     .querySelector(
@@ -4066,6 +5546,7 @@ export function showHome(app, routes) {
       "click",
       routes.cashKotopanda
     );
+
 
   app
     .querySelector(
@@ -4077,21 +5558,37 @@ export function showHome(app, routes) {
     );
 
 
+
+    app
+  .querySelector(
+    '[data-action="cashElitkaReport"]'
+  )
+  ?.addEventListener(
+    "click",
+    routes.cashElitkaReport
+  );
   // ====================================================
   // LOGOUT
   // ====================================================
 
   document
-    .getElementById("logoutButton")
+    .getElementById(
+      "logoutButton"
+    )
     .addEventListener(
       "click",
       async () => {
 
         try {
+
           await authLogout();
+
         } finally {
+
           setCurrentUser(null);
+
           routes.login();
+
         }
 
       }
@@ -4750,16 +6247,6 @@ export function showLog(app, showHome) {
 }
 </file>
 
-<file path="public/js/pages/login.js">
-import { authLogin, authMe } from "../api.js";
-import { setCurrentUser } from "../state.js";
-export function showLogin(app, showHome){
-  app.innerHTML=`<main class="login-page"><section class="login-card"><div class="login-logo">Котопанда v2+</div><h1>Вход в систему</h1><form id="loginForm" class="login-form"><label>Логин<input name="username" autocomplete="username" required></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><div id="loginError" class="error"></div><button id="loginButton" type="submit">ВОЙТИ</button></form></section></main>`;
-  const form=document.getElementById("loginForm"),error=document.getElementById("loginError"),button=document.getElementById("loginButton");
-  form.addEventListener("submit",async event=>{event.preventDefault();error.textContent="";button.disabled=true;button.textContent="ВХОД...";const data=new FormData(form);try{const login=await authLogin(String(data.get("username")||"").trim(),String(data.get("password")||""));if(!login.success){error.textContent=login.error?.message||"Ошибка авторизации";return}const me=await authMe();if(!me.success){error.textContent=me.error?.message||"Не удалось получить пользователя";return}setCurrentUser(me.data);showHome()}catch{error.textContent="Нет связи с сервером"}finally{button.disabled=false;button.textContent="ВОЙТИ"}});
-}
-</file>
-
 <file path="public/js/pages/report.js">
 import { getSalesReport } from "../api.js";
 
@@ -5149,6 +6636,7 @@ import { showSaleDocument } from "./pages/saleDocument.js";
 
 import { showCash } from "./pages/cash.js";
 import { showCashDocument } from "./pages/cashDocument.js";
+import { showCashReport } from "./pages/cashReport.js";
 
 
 let app = null;
@@ -5215,6 +6703,9 @@ export function navigate(route, params = {}) {
 
         cashElitka: () =>
           navigate("cashElitka"),
+
+        cashElitkaReport: () =>
+          navigate("cashElitkaReport"),
       });
       break;
 
@@ -5527,89 +7018,49 @@ export function formatDate(value) {
 }
 </file>
 
-<file path="public/manifest.json">
-{
-  "name": "Котопанда POS",
-  "short_name": "Котопанда",
-  "description": "Клиент Котопанда POS",
-  "id": "/",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "orientation": "any",
-  "background_color": "#ffffff",
-  "theme_color": "#4ea6ff",
-  "icons": [
-    {
-      "src": "https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "https://pos-admin.lateshoy.workers.dev/assets/icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+<file path="public/index.html">
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#4ea6ff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Котопанда">
+  <title>Котопанда POS</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/js/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch(error => {
+          console.error("Service Worker:", error);
+        });
+      });
     }
-  ]
-}
+  </script>
+</body>
+</html>
 </file>
 
-<file path="public/sw.js">
-const CACHE = "kotopanda-pos-v1";
-const APP_SHELL = [
-  "/",
-  "/index.html",
-  "/css/app.css",
-  "/js/app.js",
-  "/js/api.js",
-  "/manifest.json"
-];
-
-self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll(APP_SHELL))
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch", event => {
-  if (event.request.method !== "GET") return;
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        const copy = response.clone();
-        caches.open(CACHE).then(cache => cache.put(event.request, copy));
-        return response;
-      })
-      .catch(() => caches.match(event.request).then(response => response || caches.match("/index.html")))
-  );
-});
-</file>
-
-<file path="package.json">
+<file path="wrangler.jsonc">
 {
-  "name": "kotopanda-pos-client",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pos-client",
+  "compatibility_date": "2026-08-15",
+  "assets": {
+    "directory": "./public"
   },
-  "devDependencies": {
-    "wrangler": "^4.118.0"
+  "observability": {
+    "enabled": true
   }
 }
 </file>
@@ -7224,53 +8675,6 @@ export function showSale(app, showHome) {
 }
 </file>
 
-<file path="public/index.html">
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#4ea6ff">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Котопанда">
-  <title>Котопанда POS</title>
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" href="https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png">
-  <link rel="apple-touch-icon" href="https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png">
-  <link rel="stylesheet" href="/css/app.css">
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="/js/app.js"></script>
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/sw.js").catch(error => {
-          console.error("Service Worker:", error);
-        });
-      });
-    }
-  </script>
-</body>
-</html>
-</file>
-
-<file path="wrangler.jsonc">
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pos-client",
-  "compatibility_date": "2026-08-15",
-  "assets": {
-    "directory": "./public"
-  },
-  "observability": {
-    "enabled": true
-  }
-}
-</file>
-
 <file path="public/js/api.js">
 const API = "https://pos-api.lateshoy.workers.dev";
 
@@ -7533,6 +8937,26 @@ export function deleteCashOperation(
     {
       method: "DELETE",
     }
+  );
+}
+
+// ======================================================
+// CASH REPORT
+// ======================================================
+
+export function getCashReport(
+  cashType,
+  from,
+  to
+) {
+  return request(
+    `/api/cash/${encodeURIComponent(
+      cashType
+    )}/report?from=${encodeURIComponent(
+      from
+    )}&to=${encodeURIComponent(
+      to
+    )}`
   );
 }
 </file>
@@ -8254,6 +9678,229 @@ button { cursor: pointer; }
   background: #fff;
 
   font-size: 20px;
+}
+
+/* =====================================================
+   CASH + CUSTOM KEYBOARD
+   Клавиатура должна быть поверх модального окна
+   ===================================================== */
+
+.cashDocumentPage .keyboard {
+  z-index: 10001;
+}
+
+.cashDocumentPage #keyboard {
+  z-index: 10001;
+}
+
+/* =====================================================
+   CASH REPORT
+   ===================================================== */
+
+.cashReportPage {
+  padding-bottom: 40px;
+}
+
+
+/* =====================================================
+   PERIOD
+   ===================================================== */
+
+.cashReportPeriod {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  margin: 18px 0 12px;
+}
+
+.cashReportDateField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  font-size: 14px;
+  font-weight: 600;
+}
+
+
+/* =====================================================
+   CONTENT
+   ===================================================== */
+
+.cashReportContent {
+  margin-top: 20px;
+}
+
+
+/* =====================================================
+   BALANCE
+   ===================================================== */
+
+.cashReportBalance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 18px 16px;
+
+  font-size: 18px;
+}
+
+.cashReportBalance strong {
+  white-space: nowrap;
+  font-size: 20px;
+}
+
+.cashReportOpening {
+  border-bottom: 2px solid rgba(0, 0, 0, 0.12);
+}
+
+.cashReportClosing {
+  margin-top: 8px;
+
+  border-top: 2px solid rgba(0, 0, 0, 0.18);
+
+  font-size: 20px;
+  font-weight: 700;
+}
+
+
+/* =====================================================
+   GROUP
+   ===================================================== */
+
+.cashReportGroup {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.cashReportGroupHeader {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 15px;
+
+  padding: 16px;
+
+  border: 0;
+
+  background: transparent;
+
+  font: inherit;
+  font-size: 17px;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.cashReportGroupHeader strong {
+  white-space: nowrap;
+}
+
+.cashReportGroupLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  min-width: 0;
+}
+
+.cashReportArrow {
+  width: 18px;
+  flex: 0 0 18px;
+
+  font-size: 12px;
+}
+
+
+/* =====================================================
+   DETAILS
+   ===================================================== */
+
+.cashReportGroupDetails {
+  padding: 0 16px 12px 44px;
+}
+
+.cashReportOperation {
+  padding: 10px 0;
+
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.cashReportOperationMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 15px;
+}
+
+.cashReportOperationDate {
+  font-size: 15px;
+}
+
+.cashReportOperationMain strong {
+  white-space: nowrap;
+}
+
+
+/* =====================================================
+   COMMENT
+   ===================================================== */
+
+.cashReportOperationComment {
+  margin-top: 5px;
+
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+
+/* =====================================================
+   EMPTY
+   ===================================================== */
+
+.cashReportEmpty {
+  padding: 12px 0;
+
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 600px) {
+
+  .cashReportPeriod {
+    grid-template-columns: 1fr;
+  }
+
+  .cashReportBalance {
+    font-size: 16px;
+  }
+
+  .cashReportBalance strong {
+    font-size: 18px;
+  }
+
+  .cashReportGroupHeader {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .cashReportGroupDetails {
+    padding-left: 34px;
+    padding-right: 8px;
+  }
 }
 </file>
 
