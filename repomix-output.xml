@@ -1,0 +1,8260 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.wrangler/
+  cache/
+    wrangler-account.json
+public/
+  assets/
+    .gitkeep
+    mobile_wallpaper_720x1280.webp
+  css/
+    app.css
+  js/
+    components/
+      dialogs.js
+      keyboard.js
+    pages/
+      cash.js
+      cashDocument.js
+      home.js
+      income.js
+      journal.js
+      log.js
+      login.js
+      report.js
+      sale.js
+      saleDocument.js
+    api.js
+    app.js
+    router.js
+    state.js
+  index.html
+  manifest.json
+  sw.js
+package.json
+wrangler.jsonc
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".wrangler/cache/wrangler-account.json">
+{
+  "account": {
+    "id": "8f027d102ccd00f22e6bcce4432eb919",
+    "name": "Lateshoy@gmail.com's Account"
+  }
+}
+</file>
+
+<file path="public/js/pages/cash.js">
+import {
+  getCashDocuments,
+  createCashDocument,
+} from "../api.js";
+
+import {
+  dialogsHtml,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  hasPermission,
+  today,
+  escapeHtml,
+  formatDate,
+} from "../state.js";
+
+
+// ======================================================
+// CASH JOURNAL
+// ======================================================
+
+export function showCash(
+  app,
+  showHome,
+  openDocument,
+  cashType,
+  cashTitle
+) {
+
+  // ====================================================
+  // PERMISSIONS
+  // ====================================================
+
+  const editPermission =
+    cashType === "KOTOPANDA"
+      ? "cash.kotopanda.edit"
+      : "cash.elitka.edit";
+
+  const canEditHistory =
+    hasPermission(editPermission);
+
+  const currentDate =
+    today();
+
+
+  // ====================================================
+  // PAGE
+  // ====================================================
+
+  app.innerHTML = `
+    <main class="sale-page document-page cashPage">
+
+      <button
+        id="cashBackButton"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+
+      <div class="saleHeader">
+
+        <h2 class="saleTitle">
+          ${escapeHtml(cashTitle)}
+        </h2>
+
+      </div>
+
+
+      <table class="saleTable cashTable">
+
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Документ</th>
+            <th>Остаток</th>
+          </tr>
+        </thead>
+
+        <tbody id="cashRows"></tbody>
+
+      </table>
+
+
+      <button
+        id="cashAddButton"
+        class="cashAddButton"
+        type="button"
+        aria-label="Новый документ"
+      >
+        +
+      </button>
+
+
+      <!-- DATE DIALOG -->
+
+      <div
+        id="cashDateDialog"
+        class="cashModal"
+      >
+
+        <div class="cashModalBox">
+
+          <div class="cashModalTitle">
+            Новый документ
+          </div>
+
+
+          <div class="cashDateLabel">
+            Дата
+          </div>
+
+
+          <input
+            id="cashDocumentDate"
+            class="cashDateInput"
+            type="date"
+            value="${currentDate}"
+            max="${currentDate}"
+          >
+
+
+          <div class="cashModalActions">
+
+            <button
+              id="cashDateCancel"
+              class="cashModalCancel"
+              type="button"
+            >
+              Отмена
+            </button>
+
+            <button
+              id="cashDateCreate"
+              class="cashModalOk"
+              type="button"
+            >
+              Создать
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- LOADING -->
+
+      <div
+        id="cashLoading"
+        class="loadingOverlay"
+        aria-hidden="true"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+
+      ${dialogsHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const rows =
+    document.getElementById(
+      "cashRows"
+    );
+
+  const backButton =
+    document.getElementById(
+      "cashBackButton"
+    );
+
+  const addButton =
+    document.getElementById(
+      "cashAddButton"
+    );
+
+  const loading =
+    document.getElementById(
+      "cashLoading"
+    );
+
+
+  // DATE DIALOG
+
+  const dateDialog =
+    document.getElementById(
+      "cashDateDialog"
+    );
+
+  const dateInput =
+    document.getElementById(
+      "cashDocumentDate"
+    );
+
+  const dateCancel =
+    document.getElementById(
+      "cashDateCancel"
+    );
+
+  const dateCreate =
+    document.getElementById(
+      "cashDateCreate"
+    );
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  let busy = false;
+
+
+  // ====================================================
+  // BUSY
+  // ====================================================
+
+  function setBusy(value) {
+
+    busy = value;
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+    loading.setAttribute(
+      "aria-hidden",
+      value
+        ? "false"
+        : "true"
+    );
+
+    addButton.disabled =
+      value;
+
+    backButton.disabled =
+      value;
+
+    dateCreate.disabled =
+      value;
+  }
+
+
+  // ====================================================
+  // MONEY
+  // ====================================================
+
+  function money(value) {
+
+    const number =
+      Number(value);
+
+    if (
+      !Number.isFinite(number)
+    ) {
+      return "0.00";
+    }
+
+    return number.toFixed(2);
+  }
+
+
+  // ====================================================
+  // DRAW DOCUMENTS
+  // ====================================================
+
+  function drawDocuments(data) {
+
+    if (!data.length) {
+
+      rows.innerHTML = `
+        <tr>
+          <td
+            colspan="3"
+            class="cashEmpty"
+          >
+            Документов пока нет
+          </td>
+        </tr>
+      `;
+
+      return;
+    }
+
+
+    rows.innerHTML =
+      data
+        .map(
+          (document) => `
+
+            <tr
+              class="cashDocumentRow"
+              data-id="${Number(
+                document.id
+              )}"
+            >
+
+              <td>
+                ${escapeHtml(
+                  formatDate(
+                    document.cash_date
+                  )
+                )}
+              </td>
+
+              <td>
+                №${escapeHtml(
+                  document.id
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  money(
+                    document.closing_balance
+                  )
+                )}
+              </td>
+
+            </tr>
+
+          `
+        )
+        .join("");
+
+
+    // --------------------------------------------------
+    // OPEN DOCUMENT
+    // --------------------------------------------------
+
+    rows
+      .querySelectorAll(
+        ".cashDocumentRow"
+      )
+      .forEach((row) => {
+
+        row.addEventListener(
+          "click",
+          () => {
+
+            const id =
+              Number(
+                row.dataset.id
+              );
+
+            if (
+              Number.isInteger(id) &&
+              id > 0
+            ) {
+              openDocument(id);
+            }
+
+          }
+        );
+
+      });
+  }
+
+
+  // ====================================================
+  // LOAD
+  // ====================================================
+
+  async function loadDocuments() {
+
+    if (busy) {
+      return;
+    }
+
+
+    setBusy(true);
+
+    let result;
+
+
+    try {
+
+      result =
+        await getCashDocuments(
+          cashType
+        );
+
+    } catch {
+
+      result = {
+        success: false,
+
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    setBusy(false);
+
+
+    if (result.success) {
+
+      const data =
+        Array.isArray(result.data)
+          ? result.data
+          : [];
+
+      drawDocuments(data);
+
+      return;
+    }
+
+
+    showMessage(
+      cashTitle,
+      result.error?.message ||
+        "Не удалось загрузить документы"
+    );
+  }
+
+
+  // ====================================================
+  // CREATE DOCUMENT
+  // ====================================================
+
+  async function createDocument(
+    selectedDate = null
+  ) {
+
+    if (busy) {
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // CLIENT VALIDATION
+    // --------------------------------------------------
+
+    if (
+      selectedDate &&
+      selectedDate > currentDate
+    ) {
+
+      showMessage(
+        cashTitle,
+        "Нельзя создать документ на будущую дату"
+      );
+
+      return;
+    }
+
+
+    setBusy(true);
+
+    let result;
+
+
+    try {
+
+      result =
+        await createCashDocument(
+          cashType,
+          selectedDate
+        );
+
+    } catch {
+
+      result = {
+        success: false,
+
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    setBusy(false);
+
+
+    // --------------------------------------------------
+    // CREATED
+    // --------------------------------------------------
+
+    if (result.success) {
+
+      const id =
+        Number(
+          result.data?.id
+        );
+
+
+      if (
+        Number.isInteger(id) &&
+        id > 0
+      ) {
+
+        openDocument(id);
+
+        return;
+      }
+
+
+      await loadDocuments();
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // ALREADY EXISTS
+    //
+    // Если документ за эту дату уже существует,
+    // API возвращает его id.
+    // Просто открываем его.
+    // --------------------------------------------------
+
+    const existingId =
+      Number(
+        result.data?.id
+      );
+
+
+    if (
+      Number.isInteger(existingId) &&
+      existingId > 0
+    ) {
+
+      openDocument(
+        existingId
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    showMessage(
+      cashTitle,
+      result.error?.message ||
+        "Не удалось создать документ"
+    );
+  }
+
+
+  // ====================================================
+  // ADD BUTTON
+  // ====================================================
+
+  function addDocument() {
+
+    if (busy) {
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // WITHOUT EDIT PERMISSION
+    //
+    // Старое поведение:
+    // сразу создаём сегодняшний документ.
+    // --------------------------------------------------
+
+    if (!canEditHistory) {
+
+      createDocument();
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // WITH EDIT PERMISSION
+    //
+    // Показываем выбор даты.
+    // --------------------------------------------------
+
+    dateInput.value =
+      currentDate;
+
+    dateDialog.classList.add(
+      "show"
+    );
+  }
+
+
+  // ====================================================
+  // DATE CREATE
+  // ====================================================
+
+  function createSelectedDate() {
+
+    const selectedDate =
+      String(
+        dateInput.value || ""
+      ).trim();
+
+
+    if (!selectedDate) {
+
+      showMessage(
+        cashTitle,
+        "Выберите дату"
+      );
+
+      return;
+    }
+
+
+    if (
+      selectedDate >
+      currentDate
+    ) {
+
+      showMessage(
+        cashTitle,
+        "Нельзя создать документ на будущую дату"
+      );
+
+      return;
+    }
+
+
+    dateDialog.classList.remove(
+      "show"
+    );
+
+
+    createDocument(
+      selectedDate
+    );
+  }
+
+
+  // ====================================================
+  // EVENTS
+  // ====================================================
+
+  backButton.addEventListener(
+    "click",
+    showHome
+  );
+
+
+  addButton.addEventListener(
+    "click",
+    addDocument
+  );
+
+
+  dateCancel.addEventListener(
+    "click",
+    () => {
+
+      dateDialog.classList.remove(
+        "show"
+      );
+
+    }
+  );
+
+
+  dateCreate.addEventListener(
+    "click",
+    createSelectedDate
+  );
+
+
+  // ====================================================
+  // INITIAL
+  // ====================================================
+
+  loadDocuments();
+}
+</file>
+
+<file path="public/js/pages/cashDocument.js">
+import {
+  getCashDocument,
+  addCashOperation,
+  updateCashOperation,
+  deleteCashOperation,
+} from "../api.js";
+
+import {
+  dialogsHtml,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  showKeyboard,
+  hideKeyboard,
+} from "../components/keyboard.js";
+
+import {
+  hasPermission,
+  today,
+  escapeHtml,
+  formatDate,
+} from "../state.js";
+
+
+// ======================================================
+// CASH OPERATIONS
+// ======================================================
+
+const CASH_OPERATIONS = {
+
+  // ====================================================
+  // ELITKA
+  // ====================================================
+
+  ELITKA: {
+
+    plus: [
+      {
+        type: "SALES",
+        label: "Реализация",
+      },
+    ],
+
+    minus: [
+      {
+        type: "TERMINAL",
+        label: "Терминал",
+      },
+
+      {
+        type: "WITHDRAWAL",
+        label: "Съём",
+      },
+
+      {
+        type: "SUGAR",
+        label: "Расход сахар и пр.",
+      },
+
+      {
+        type: "OTHER",
+        label: "Расход прочие",
+        comment: true,
+      },
+
+      {
+        type: "SALARY",
+        label: "Зарплата",
+        comment: true,
+      },
+    ],
+  },
+
+
+  // ====================================================
+  // KOTOPANDA
+  // ====================================================
+
+  KOTOPANDA: {
+
+    plus: [
+      {
+        type: "SALES",
+        label: "Реализация",
+      },
+
+      {
+        type: "CASH_IN",
+        label: "Дали в кассу",
+      },
+    ],
+
+    minus: [
+      {
+        type: "TERMINAL",
+        label: "Терминал",
+      },
+
+      {
+        type: "WITHDRAWAL",
+        label: "Съём",
+      },
+
+      {
+        type: "OTHER",
+        label: "Прочие",
+        comment: true,
+      },
+
+      {
+        type: "SALARY",
+        label: "Зарплата",
+        comment: true,
+      },
+    ],
+  },
+};
+
+
+// ======================================================
+// PAGE
+// ======================================================
+
+export function showCashDocument(
+  app,
+  cashType,
+  cashTitle,
+  documentId,
+  goBack
+) {
+
+  // ====================================================
+  // EDIT PERMISSION
+  // ====================================================
+
+  const editPermission =
+    cashType === "KOTOPANDA"
+      ? "cash.kotopanda.edit"
+      : "cash.elitka.edit";
+
+  const canEditHistory =
+    hasPermission(
+      editPermission
+    );
+
+
+  // ====================================================
+  // HTML
+  // ====================================================
+
+  app.innerHTML = `
+    <main class="sale-page document-page cashDocumentPage">
+
+      <button
+        id="cashDocumentBack"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+
+      <div class="saleHeader">
+
+        <h2 class="saleTitle">
+          ${escapeHtml(cashTitle)}
+        </h2>
+
+      </div>
+
+
+      <div id="cashDocumentContent"></div>
+
+
+      <!-- ACTION BUTTONS -->
+
+      <div
+        id="cashActionButtons"
+        class="cashActionButtons"
+        hidden
+      >
+
+        <button
+          id="cashPlusButton"
+          class="cashOperationButton cashPlusButton"
+          type="button"
+        >
+          +
+        </button>
+
+        <button
+          id="cashMinusButton"
+          class="cashOperationButton cashMinusButton"
+          type="button"
+        >
+          −
+        </button>
+
+      </div>
+
+
+      <!-- OPERATION TYPE DIALOG -->
+
+      <div
+        id="cashTypeDialog"
+        class="cashModal"
+      >
+
+        <div class="cashModalBox">
+
+          <div
+            id="cashTypeTitle"
+            class="cashModalTitle"
+          >
+            Операция
+          </div>
+
+          <div
+            id="cashTypeButtons"
+            class="cashTypeButtons"
+          ></div>
+
+          <button
+            id="cashTypeCancel"
+            class="cashModalCancel"
+            type="button"
+          >
+            Отмена
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- AMOUNT DIALOG -->
+
+      <div
+        id="cashAmountDialog"
+        class="cashModal"
+      >
+
+        <div class="cashModalBox">
+
+          <div
+            id="cashAmountTitle"
+            class="cashModalTitle"
+          >
+            Сумма
+          </div>
+
+
+          <!--
+            Системную клавиатуру запрещаем.
+            Поле заполняет наша клавиатура.
+          -->
+
+          <input
+            id="cashAmountInput"
+            class="cashAmountInput"
+            type="text"
+            inputmode="none"
+            autocomplete="off"
+            placeholder="0.00"
+            readonly
+          >
+
+
+          <div
+            id="cashCommentBlock"
+            class="cashCommentBlock"
+            hidden
+          >
+
+            <div class="cashCommentLabel">
+              Комментарий
+            </div>
+
+            <input
+              id="cashCommentInput"
+              class="cashCommentInput"
+              type="text"
+              autocomplete="off"
+            >
+
+          </div>
+
+
+          <div class="cashModalActions">
+
+            <button
+              id="cashAmountCancel"
+              class="cashModalCancel"
+              type="button"
+            >
+              Отмена
+            </button>
+
+            <button
+              id="cashAmountOk"
+              class="cashModalOk"
+              type="button"
+            >
+              Записать
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ROW ACTION DIALOG -->
+
+      <div
+        id="cashRowDialog"
+        class="cashModal"
+      >
+
+        <div class="cashModalBox">
+
+          <div class="cashModalTitle">
+            Операция
+          </div>
+
+          <div class="cashTypeButtons">
+
+            <button
+              id="cashEditButton"
+              class="cashTypeButton"
+              type="button"
+            >
+              Изменить
+            </button>
+
+            <button
+              id="cashDeleteButton"
+              class="cashTypeButton cashDeleteButton"
+              type="button"
+            >
+              Удалить
+            </button>
+
+          </div>
+
+          <button
+            id="cashRowCancel"
+            class="cashModalCancel"
+            type="button"
+          >
+            Отмена
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- LOADING -->
+
+      <div
+        id="cashDocumentLoading"
+        class="loadingOverlay show"
+        aria-hidden="false"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+
+      ${dialogsHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const back =
+    document.getElementById(
+      "cashDocumentBack"
+    );
+
+  const content =
+    document.getElementById(
+      "cashDocumentContent"
+    );
+
+  const loading =
+    document.getElementById(
+      "cashDocumentLoading"
+    );
+
+
+  // ACTION BUTTONS
+
+  const actionButtons =
+    document.getElementById(
+      "cashActionButtons"
+    );
+
+  const plusButton =
+    document.getElementById(
+      "cashPlusButton"
+    );
+
+  const minusButton =
+    document.getElementById(
+      "cashMinusButton"
+    );
+
+
+  // TYPE DIALOG
+
+  const typeDialog =
+    document.getElementById(
+      "cashTypeDialog"
+    );
+
+  const typeTitle =
+    document.getElementById(
+      "cashTypeTitle"
+    );
+
+  const typeButtons =
+    document.getElementById(
+      "cashTypeButtons"
+    );
+
+  const typeCancel =
+    document.getElementById(
+      "cashTypeCancel"
+    );
+
+
+  // AMOUNT DIALOG
+
+  const amountDialog =
+    document.getElementById(
+      "cashAmountDialog"
+    );
+
+  const amountTitle =
+    document.getElementById(
+      "cashAmountTitle"
+    );
+
+  const amountInput =
+    document.getElementById(
+      "cashAmountInput"
+    );
+
+  const commentBlock =
+    document.getElementById(
+      "cashCommentBlock"
+    );
+
+  const commentInput =
+    document.getElementById(
+      "cashCommentInput"
+    );
+
+  const amountCancel =
+    document.getElementById(
+      "cashAmountCancel"
+    );
+
+  const amountOk =
+    document.getElementById(
+      "cashAmountOk"
+    );
+
+
+  // ROW ACTION DIALOG
+
+  const rowDialog =
+    document.getElementById(
+      "cashRowDialog"
+    );
+
+  const editButton =
+    document.getElementById(
+      "cashEditButton"
+    );
+
+  const deleteButton =
+    document.getElementById(
+      "cashDeleteButton"
+    );
+
+  const rowCancel =
+    document.getElementById(
+      "cashRowCancel"
+    );
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  let documentData = null;
+
+  let busy = false;
+
+  let selectedDefinition = null;
+
+  let selectedSign = null;
+
+  let selectedOperation = null;
+
+  let editMode = false;
+
+
+  // ====================================================
+  // MONEY
+  // ====================================================
+
+  function money(value) {
+
+    const number =
+      Number(value);
+
+    return Number.isFinite(number)
+      ? number.toFixed(2)
+      : "0.00";
+  }
+
+
+  // ====================================================
+  // CAN EDIT DOCUMENT
+  //
+  // Сегодня — можно редактировать.
+  //
+  // Прошлая дата:
+  //
+  // KOTOPANDA:
+  // cash.kotopanda.edit
+  //
+  // ELITKA:
+  // cash.elitka.edit
+  // ====================================================
+
+  function canEditDocument() {
+
+    if (!documentData) {
+      return false;
+    }
+
+
+    // Сегодня
+
+    if (
+      documentData.cash_date ===
+      today()
+    ) {
+      return true;
+    }
+
+
+    // Прошлые даты
+
+    return canEditHistory;
+  }
+
+
+  // ====================================================
+  // FIND OPERATION DEFINITION
+  // ====================================================
+
+  function findDefinition(
+    operationType
+  ) {
+
+    const config =
+      CASH_OPERATIONS[cashType];
+
+
+    if (!config) {
+      return null;
+    }
+
+
+    return [
+      ...config.plus,
+      ...config.minus,
+    ].find(
+      (item) =>
+        item.type ===
+        operationType
+    ) || null;
+  }
+
+
+  // ====================================================
+  // OPERATION LABEL
+  // ====================================================
+
+  function operationLabel(
+    operation
+  ) {
+
+    const definition =
+      findDefinition(
+        operation.operation_type
+      );
+
+
+    return (
+      definition?.label ||
+      operation.operation_type ||
+      ""
+    );
+  }
+
+
+  // ====================================================
+  // BUSY
+  // ====================================================
+
+  function setBusy(value) {
+
+    busy = value;
+
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+
+    loading.setAttribute(
+      "aria-hidden",
+      value
+        ? "false"
+        : "true"
+    );
+
+
+    back.disabled =
+      value;
+
+    plusButton.disabled =
+      value;
+
+    minusButton.disabled =
+      value;
+
+    amountOk.disabled =
+      value;
+
+    editButton.disabled =
+      value;
+
+    deleteButton.disabled =
+      value;
+  }
+
+
+  // ====================================================
+  // RESET SELECTION
+  // ====================================================
+
+  function resetSelection() {
+
+    selectedDefinition =
+      null;
+
+    selectedSign =
+      null;
+
+    selectedOperation =
+      null;
+
+    editMode =
+      false;
+
+
+    amountInput.value =
+      "";
+
+    commentInput.value =
+      "";
+  }
+
+
+  // ====================================================
+  // CLOSE AMOUNT DIALOG
+  // ====================================================
+
+  function closeAmountDialog() {
+
+    hideKeyboard();
+
+
+    amountDialog.classList.remove(
+      "show"
+    );
+
+
+    resetSelection();
+  }
+
+
+  // ====================================================
+  // DRAW DOCUMENT
+  // ====================================================
+
+  function draw() {
+
+    if (!documentData) {
+      return;
+    }
+
+
+    const operations =
+      Array.isArray(
+        documentData.operations
+      )
+        ? documentData.operations
+        : [];
+
+
+    const editable =
+      canEditDocument();
+
+
+    content.innerHTML = `
+
+      <div class="cashDocumentHeader">
+
+        <div>
+          ${escapeHtml(
+            formatDate(
+              documentData.cash_date
+            )
+          )}
+        </div>
+
+        <div>
+          Документ №${escapeHtml(
+            documentData.id
+          )}
+        </div>
+
+      </div>
+
+
+      <div class="cashBalanceBlock">
+
+        <div>
+
+          <span>
+            Остаток на начало
+          </span>
+
+          <strong>
+            ${escapeHtml(
+              money(
+                documentData.opening_balance
+              )
+            )}
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      <table class="saleTable cashOperationsTable">
+
+        <thead>
+
+          <tr>
+
+            <th>
+              Операция
+            </th>
+
+            <th>
+              Сумма
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody>
+
+          ${
+            operations.length
+
+              ? operations
+                  .map(
+                    (operation) => `
+
+                      <tr
+                        class="${
+                          editable
+                            ? "cashOperationRow"
+                            : ""
+                        }"
+                        data-id="${Number(
+                          operation.id
+                        )}"
+                      >
+
+                        <td>
+
+                          <div class="cashOperationName">
+
+                            ${
+                              Number(
+                                operation.sign
+                              ) === -1
+                                ? "−"
+                                : "+"
+                            }
+
+                            ${escapeHtml(
+                              operationLabel(
+                                operation
+                              )
+                            )}
+
+                          </div>
+
+
+                          ${
+                            operation.comment
+
+                              ? `
+                                <div class="cashOperationComment">
+
+                                  ${escapeHtml(
+                                    operation.comment
+                                  )}
+
+                                </div>
+                              `
+
+                              : ""
+                          }
+
+                        </td>
+
+
+                        <td
+                          class="${
+                            Number(
+                              operation.sign
+                            ) === -1
+                              ? "cashNegative"
+                              : "cashPositive"
+                          }"
+                        >
+
+                          ${
+                            Number(
+                              operation.sign
+                            ) === -1
+                              ? "−"
+                              : "+"
+                          }
+
+                          ${escapeHtml(
+                            money(
+                              operation.amount
+                            )
+                          )}
+
+                        </td>
+
+                      </tr>
+
+                    `
+                  )
+                  .join("")
+
+              : `
+
+                <tr>
+
+                  <td
+                    colspan="2"
+                    class="cashEmpty"
+                  >
+                    Операций пока нет
+                  </td>
+
+                </tr>
+
+              `
+          }
+
+        </tbody>
+
+      </table>
+
+
+      <div class="cashClosingBalance">
+
+        <span>
+          Остаток
+        </span>
+
+        <strong>
+          ${escapeHtml(
+            money(
+              documentData.closing_balance
+            )
+          )}
+        </strong>
+
+      </div>
+
+    `;
+
+
+    // ==================================================
+    // + / -
+    // ==================================================
+
+    actionButtons.hidden =
+      !editable;
+
+
+    // ==================================================
+    // OPERATION ROW EVENTS
+    // ==================================================
+
+    if (editable) {
+
+      content
+        .querySelectorAll(
+          ".cashOperationRow"
+        )
+        .forEach((row) => {
+
+          row.addEventListener(
+            "click",
+            () => {
+
+              if (busy) {
+                return;
+              }
+
+
+              const id =
+                Number(
+                  row.dataset.id
+                );
+
+
+              selectedOperation =
+                operations.find(
+                  (item) =>
+                    Number(item.id) === id
+                ) || null;
+
+
+              if (
+                !selectedOperation
+              ) {
+                return;
+              }
+
+
+              rowDialog.classList.add(
+                "show"
+              );
+
+            }
+          );
+
+        });
+
+    }
+  }
+
+
+  // ====================================================
+  // LOAD DOCUMENT
+  // ====================================================
+
+  async function load() {
+
+    setBusy(true);
+
+
+    let result;
+
+
+    try {
+
+      result =
+        await getCashDocument(
+          cashType,
+          documentId
+        );
+
+    } catch {
+
+      result = {
+
+        success: false,
+
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+
+      };
+
+    }
+
+
+    setBusy(false);
+
+
+    if (!result.success) {
+
+      showMessage(
+        cashTitle,
+        result.error?.message ||
+          "Не удалось загрузить документ"
+      );
+
+      return;
+    }
+
+
+    documentData =
+      result.data;
+
+
+    draw();
+  }
+
+
+  // ====================================================
+  // OPEN TYPE MENU
+  // ====================================================
+
+  function openTypeMenu(sign) {
+
+    if (
+      busy ||
+      !canEditDocument()
+    ) {
+      return;
+    }
+
+
+    resetSelection();
+
+
+    const config =
+      CASH_OPERATIONS[cashType];
+
+
+    if (!config) {
+      return;
+    }
+
+
+    selectedSign =
+      sign;
+
+
+    const operations =
+      sign === 1
+        ? config.plus
+        : config.minus;
+
+
+    typeTitle.textContent =
+      sign === 1
+        ? "Приход"
+        : "Расход";
+
+
+    typeButtons.innerHTML =
+      operations
+        .map(
+          (operation) => `
+
+            <button
+              class="cashTypeButton"
+              type="button"
+              data-type="${escapeHtml(
+                operation.type
+              )}"
+            >
+              ${escapeHtml(
+                operation.label
+              )}
+            </button>
+
+          `
+        )
+        .join("");
+
+
+    typeButtons
+      .querySelectorAll(
+        ".cashTypeButton"
+      )
+      .forEach((button) => {
+
+        button.addEventListener(
+          "click",
+          () => {
+
+            const type =
+              button.dataset.type;
+
+
+            selectedDefinition =
+              operations.find(
+                (operation) =>
+                  operation.type ===
+                  type
+              ) || null;
+
+
+            if (
+              !selectedDefinition
+            ) {
+              return;
+            }
+
+
+            typeDialog.classList.remove(
+              "show"
+            );
+
+
+            openAmountDialog();
+
+          }
+        );
+
+      });
+
+
+    typeDialog.classList.add(
+      "show"
+    );
+  }
+
+
+  // ====================================================
+  // OPEN AMOUNT DIALOG
+  // ====================================================
+
+  function openAmountDialog() {
+
+    if (
+      !selectedDefinition
+    ) {
+      return;
+    }
+
+
+    amountTitle.textContent =
+      selectedDefinition.label;
+
+
+    // --------------------------------------------------
+    // NEW OPERATION
+    // --------------------------------------------------
+
+    if (!editMode) {
+
+      amountInput.value =
+        "";
+
+      commentInput.value =
+        "";
+
+    }
+
+
+    // --------------------------------------------------
+    // COMMENT
+    // --------------------------------------------------
+
+    commentBlock.hidden =
+      !selectedDefinition.comment;
+
+
+    // --------------------------------------------------
+    // SHOW DIALOG
+    // --------------------------------------------------
+
+    amountDialog.classList.add(
+      "show"
+    );
+
+
+    // --------------------------------------------------
+    // OUR NUMERIC KEYBOARD
+    // --------------------------------------------------
+
+    setTimeout(
+      () => {
+
+        amountInput.focus();
+
+
+        // При редактировании выделяем всю сумму.
+        // Первая введённая цифра заменит старое значение.
+
+        amountInput.select();
+
+
+        showKeyboard(
+          amountInput,
+          {
+
+            onEnter: () => {
+
+              saveOperation();
+
+            },
+
+          }
+        );
+
+      },
+      50
+    );
+  }
+
+
+  // ====================================================
+  // SAVE OPERATION
+  // ====================================================
+
+  async function saveOperation() {
+
+    if (
+      busy ||
+      !selectedDefinition ||
+      !canEditDocument()
+    ) {
+      return;
+    }
+
+
+    // Закрываем нашу цифровую клавиатуру
+
+    hideKeyboard();
+
+
+    const amount =
+      Number(
+        String(
+          amountInput.value
+        ).replace(",", ".")
+      );
+
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+
+      showMessage(
+        cashTitle,
+        "Введите корректную сумму"
+      );
+
+      return;
+    }
+
+
+    const comment =
+      String(
+        commentInput.value ?? ""
+      ).trim();
+
+
+    if (
+      selectedDefinition.comment &&
+      !comment
+    ) {
+
+      showMessage(
+        cashTitle,
+        "Введите комментарий"
+      );
+
+      return;
+    }
+
+
+    amountDialog.classList.remove(
+      "show"
+    );
+
+
+    setBusy(true);
+
+
+    let result;
+
+
+    try {
+
+      // =================================================
+      // UPDATE
+      // =================================================
+
+      if (
+        editMode &&
+        selectedOperation
+      ) {
+
+        result =
+          await updateCashOperation(
+            cashType,
+            documentId,
+            selectedOperation.id,
+            {
+
+              sign:
+                selectedSign,
+
+              operation_type:
+                selectedDefinition.type,
+
+              amount,
+
+              comment,
+
+            }
+          );
+
+      }
+
+      // =================================================
+      // CREATE
+      // =================================================
+
+      else {
+
+        result =
+          await addCashOperation(
+            cashType,
+            documentId,
+            {
+
+              sign:
+                selectedSign,
+
+              operation_type:
+                selectedDefinition.type,
+
+              amount,
+
+              comment,
+
+            }
+          );
+
+      }
+
+    } catch {
+
+      result = {
+
+        success: false,
+
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+
+      };
+
+    }
+
+
+    setBusy(false);
+
+
+    if (!result.success) {
+
+      showMessage(
+        cashTitle,
+        result.error?.message ||
+          "Не удалось записать операцию"
+      );
+
+      return;
+    }
+
+
+    resetSelection();
+
+
+    await load();
+  }
+
+
+  // ====================================================
+  // EDIT SELECTED OPERATION
+  // ====================================================
+
+  function editSelected() {
+
+    if (
+      !selectedOperation ||
+      !canEditDocument()
+    ) {
+      return;
+    }
+
+
+    rowDialog.classList.remove(
+      "show"
+    );
+
+
+    selectedDefinition =
+      findDefinition(
+        selectedOperation.operation_type
+      );
+
+
+    if (
+      !selectedDefinition
+    ) {
+
+      showMessage(
+        cashTitle,
+        "Неизвестный тип операции"
+      );
+
+      return;
+    }
+
+
+    selectedSign =
+      Number(
+        selectedOperation.sign
+      );
+
+
+    editMode =
+      true;
+
+
+    amountInput.value =
+      money(
+        selectedOperation.amount
+      );
+
+
+    commentInput.value =
+      String(
+        selectedOperation.comment ||
+        ""
+      );
+
+
+    openAmountDialog();
+  }
+
+
+  // ====================================================
+  // DELETE SELECTED OPERATION
+  // ====================================================
+
+  async function deleteSelected() {
+
+    if (
+      busy ||
+      !selectedOperation ||
+      !canEditDocument()
+    ) {
+      return;
+    }
+
+
+    rowDialog.classList.remove(
+      "show"
+    );
+
+
+    const confirmed =
+      window.confirm(
+        "Удалить операцию?"
+      );
+
+
+    if (!confirmed) {
+
+      resetSelection();
+
+      return;
+    }
+
+
+    setBusy(true);
+
+
+    let result;
+
+
+    try {
+
+      result =
+        await deleteCashOperation(
+          cashType,
+          documentId,
+          selectedOperation.id
+        );
+
+    } catch {
+
+      result = {
+
+        success: false,
+
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+
+      };
+
+    }
+
+
+    setBusy(false);
+
+
+    if (!result.success) {
+
+      showMessage(
+        cashTitle,
+        result.error?.message ||
+          "Не удалось удалить операцию"
+      );
+
+      return;
+    }
+
+
+    resetSelection();
+
+
+    await load();
+  }
+
+
+  // ====================================================
+  // EVENTS
+  // ====================================================
+
+  back.addEventListener(
+    "click",
+    () => {
+
+      hideKeyboard();
+
+      goBack();
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // PLUS
+  // ----------------------------------------------------
+
+  plusButton.addEventListener(
+    "click",
+    () => {
+
+      openTypeMenu(1);
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // MINUS
+  // ----------------------------------------------------
+
+  minusButton.addEventListener(
+    "click",
+    () => {
+
+      openTypeMenu(-1);
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // TYPE CANCEL
+  // ----------------------------------------------------
+
+  typeCancel.addEventListener(
+    "click",
+    () => {
+
+      typeDialog.classList.remove(
+        "show"
+      );
+
+      resetSelection();
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // AMOUNT CANCEL
+  // ----------------------------------------------------
+
+  amountCancel.addEventListener(
+    "click",
+    () => {
+
+      closeAmountDialog();
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // AMOUNT OK
+  // ----------------------------------------------------
+
+  amountOk.addEventListener(
+    "click",
+    () => {
+
+      saveOperation();
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // EDIT
+  // ----------------------------------------------------
+
+  editButton.addEventListener(
+    "click",
+    () => {
+
+      editSelected();
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // DELETE
+  // ----------------------------------------------------
+
+  deleteButton.addEventListener(
+    "click",
+    () => {
+
+      deleteSelected();
+
+    }
+  );
+
+
+  // ----------------------------------------------------
+  // ROW CANCEL
+  // ----------------------------------------------------
+
+  rowCancel.addEventListener(
+    "click",
+    () => {
+
+      rowDialog.classList.remove(
+        "show"
+      );
+
+      resetSelection();
+
+    }
+  );
+
+
+  // ====================================================
+  // START
+  // ====================================================
+
+  load();
+}
+</file>
+
+<file path="public/js/pages/saleDocument.js">
+import {
+  getSale,
+  getProductByBarcode,
+  updateSale,
+} from "../api.js";
+
+import {
+  keyboardHtml,
+  initKeyboard,
+  showKeyboard,
+  hideKeyboard,
+} from "../components/keyboard.js";
+
+import {
+  dialogsHtml,
+  showChoice,
+  showConfirm,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  hasPermission,
+  escapeHtml,
+  formatDate,
+} from "../state.js";
+
+
+// ======================================================
+// SALE DOCUMENT
+// ======================================================
+
+export function showSaleDocument(
+  app,
+  saleId,
+  showJournal
+) {
+
+  // ====================================================
+  // PERMISSION
+  // ====================================================
+
+  const canEdit =
+    hasPermission("sale.edit");
+
+
+  // ====================================================
+  // PAGE
+  // ====================================================
+
+  app.innerHTML = `
+    <main class="sale-page document-page">
+
+      <button
+        id="documentBackButton"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+
+      <!-- HEADER -->
+
+      <div class="saleHeader">
+
+        <h2
+          id="documentTitle"
+          class="saleTitle"
+        >
+          Документ
+        </h2>
+
+        <input
+          id="documentDate"
+          type="text"
+          class="saleDate"
+          value=""
+          readonly
+          disabled
+        >
+
+      </div>
+
+
+      <!-- BARCODE -->
+
+      <div class="saleBarcodeRow">
+
+        <input
+          id="documentBarcode"
+          class="saleBarcode"
+          type="text"
+          inputmode="none"
+          maxlength="5"
+          placeholder="Штрихкод"
+          readonly
+          ${canEdit ? "" : "disabled"}
+        >
+
+        <button
+          id="documentMicButton"
+          class="productMicButton"
+          type="button"
+          disabled
+        >
+          🎤
+        </button>
+
+      </div>
+
+
+      <!-- ITEMS -->
+
+      <table class="saleTable">
+
+        <thead>
+          <tr>
+            <th>Код</th>
+            <th>Наименование</th>
+            <th>Цена</th>
+          </tr>
+        </thead>
+
+        <tbody id="documentItems"></tbody>
+
+      </table>
+
+
+      <!-- TOTALS -->
+
+      <div class="saleTotals">
+
+        <div>
+          Количество:
+          <span id="documentCount">
+            0
+          </span>
+          шт.
+        </div>
+
+        <div>
+          Сумма:
+          <span id="documentSum">
+            0.00
+          </span>
+        </div>
+
+      </div>
+
+
+      ${
+        canEdit
+          ? `
+            <button
+              id="documentSaveButton"
+              class="saleButton"
+              type="button"
+              disabled
+            >
+              Перезаписать
+            </button>
+          `
+          : ""
+      }
+
+
+      <!-- PRICE EDITOR -->
+
+      ${
+        canEdit
+          ? `
+            <div
+              id="documentPricePanel"
+              class="pricePanel"
+            >
+
+              <div class="pricePanelTitle">
+                Изменить цену
+              </div>
+
+              <input
+                id="documentNewPrice"
+                class="saleBarcode priceInput"
+                type="text"
+                inputmode="none"
+                readonly
+              >
+
+            </div>
+          `
+          : ""
+      }
+
+
+      <!-- LOADING -->
+
+      <div
+        id="documentLoading"
+        class="loadingOverlay show"
+        aria-hidden="false"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+
+      ${dialogsHtml()}
+
+      ${canEdit ? keyboardHtml() : ""}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // KEYBOARD
+  // ====================================================
+
+  if (canEdit) {
+    initKeyboard();
+  }
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const backButton =
+    document.getElementById(
+      "documentBackButton"
+    );
+
+  const title =
+    document.getElementById(
+      "documentTitle"
+    );
+
+  const date =
+    document.getElementById(
+      "documentDate"
+    );
+
+  const barcode =
+    document.getElementById(
+      "documentBarcode"
+    );
+
+  const itemsBody =
+    document.getElementById(
+      "documentItems"
+    );
+
+  const count =
+    document.getElementById(
+      "documentCount"
+    );
+
+  const sum =
+    document.getElementById(
+      "documentSum"
+    );
+
+  const loading =
+    document.getElementById(
+      "documentLoading"
+    );
+
+  const saveButton =
+    document.getElementById(
+      "documentSaveButton"
+    );
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  const saleItems = [];
+
+  let selectedIndex = -1;
+
+  let lookupSequence = 0;
+
+  let barcodeError = false;
+
+  let loadingDocument = false;
+
+  let saving = false;
+
+  let changed = false;
+
+
+  // ====================================================
+  // TOTALS
+  // ====================================================
+
+  function updateTotals() {
+
+    count.textContent =
+      String(saleItems.length);
+
+    const total =
+      saleItems.reduce(
+        (value, item) =>
+          value +
+          Number(
+            item.sell_price || 0
+          ),
+        0
+      );
+
+    sum.textContent =
+      total.toFixed(2);
+
+
+    if (saveButton) {
+      saveButton.disabled =
+        saving ||
+        loadingDocument ||
+        !changed ||
+        saleItems.length === 0;
+    }
+  }
+
+
+  // ====================================================
+  // DRAW TABLE
+  // ====================================================
+
+  function drawTable() {
+
+    itemsBody.innerHTML =
+      saleItems
+        .map(
+          (item, index) => `
+            <tr
+              data-index="${index}"
+              class="${
+                selectedIndex === index
+                  ? "selected"
+                  : ""
+              }"
+            >
+
+              <td>
+                ${escapeHtml(
+                  item.barcode
+                )}
+              </td>
+
+              <td>
+                ${escapeHtml(
+                  item.name
+                )}
+              </td>
+
+              <td>
+                ${Number(
+                  item.sell_price || 0
+                ).toFixed(2)}
+              </td>
+
+            </tr>
+          `
+        )
+        .join("");
+
+    updateTotals();
+  }
+
+
+  // ====================================================
+  // LOADING
+  // ====================================================
+
+  function setLoading(value) {
+
+    loadingDocument = value;
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+    loading.setAttribute(
+      "aria-hidden",
+      value
+        ? "false"
+        : "true"
+    );
+
+    backButton.disabled =
+      value || saving;
+
+    if (canEdit) {
+      barcode.disabled =
+        value || saving;
+    }
+
+    updateTotals();
+  }
+
+
+  // ====================================================
+  // EDIT LOCK
+  // ====================================================
+
+  function setEditLocked(locked) {
+
+    if (!canEdit) {
+      return;
+    }
+
+    barcode.disabled =
+      locked;
+
+    backButton.disabled =
+      locked;
+
+    if (saveButton) {
+      saveButton.disabled =
+        locked ||
+        !changed ||
+        saleItems.length === 0;
+    }
+  }
+
+
+  // ====================================================
+  // MARK CHANGED
+  // ====================================================
+
+  function markChanged() {
+
+    changed = true;
+
+    updateTotals();
+  }
+
+
+  // ====================================================
+  // LOAD DOCUMENT
+  // ====================================================
+
+  async function loadDocument() {
+
+    const id =
+      Number(saleId);
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+
+      setLoading(false);
+
+      showMessage(
+        "Документ",
+        "Некорректный номер документа",
+        showJournal
+      );
+
+      return;
+    }
+
+
+    setLoading(true);
+
+    let result;
+
+    try {
+
+      result =
+        await getSale(id);
+
+    } catch {
+
+      result = {
+        success: false,
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    setLoading(false);
+
+
+    if (!result.success) {
+
+      showMessage(
+        "Ошибка документа",
+        result.error?.message ||
+          "Не удалось загрузить документ",
+        showJournal
+      );
+
+      return;
+    }
+
+
+    const sale =
+      result.data;
+
+
+    // --------------------------------------------------
+    // HEADER
+    // --------------------------------------------------
+
+    title.textContent =
+      `Документ №${sale.id}`;
+
+    date.value =
+      formatDate(
+        sale.sale_date
+      );
+
+
+    // --------------------------------------------------
+    // ITEMS
+    // --------------------------------------------------
+
+    saleItems.length = 0;
+
+    const items =
+      Array.isArray(sale.items)
+        ? sale.items
+        : [];
+
+    for (const item of items) {
+
+      saleItems.push({
+        barcode:
+          item.barcode,
+
+        name:
+          item.name,
+
+        buy_price:
+          Number(
+            item.buy_price || 0
+          ),
+
+        sell_price:
+          Number(
+            item.sell_price || 0
+          ),
+      });
+
+    }
+
+
+    selectedIndex = -1;
+
+    changed = false;
+
+    drawTable();
+  }
+
+
+  // ====================================================
+  // READ ONLY MODE
+  // ====================================================
+
+  if (!canEdit) {
+
+    backButton.addEventListener(
+      "click",
+      showJournal
+    );
+
+    loadDocument();
+
+    return;
+  }
+
+
+  // ====================================================
+  // CANCEL SELECTION
+  // ====================================================
+
+  function cancelSelection() {
+
+    selectedIndex = -1;
+
+    drawTable();
+  }
+
+
+  // ====================================================
+  // DELETE ITEM
+  // ====================================================
+
+  function deleteSelected() {
+
+    if (selectedIndex < 0) {
+      return;
+    }
+
+    saleItems.splice(
+      selectedIndex,
+      1
+    );
+
+    selectedIndex = -1;
+
+    markChanged();
+
+    drawTable();
+  }
+
+
+  // ====================================================
+  // PRICE PANEL
+  // ====================================================
+
+  function closePricePanel() {
+
+    document
+      .getElementById(
+        "documentPricePanel"
+      )
+      ?.classList.remove(
+        "show",
+        "keyboardOpen"
+      );
+
+    selectedIndex = -1;
+
+    drawTable();
+
+    setEditLocked(false);
+  }
+
+
+  // ====================================================
+  // SAVE NEW PRICE
+  // ====================================================
+
+  function savePrice() {
+
+    if (selectedIndex < 0) {
+      return;
+    }
+
+    const input =
+      document.getElementById(
+        "documentNewPrice"
+      );
+
+    const price =
+      Number(input.value);
+
+    if (
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      return;
+    }
+
+
+    saleItems[
+      selectedIndex
+    ].sell_price = price;
+
+    markChanged();
+
+    drawTable();
+  }
+
+
+  // ====================================================
+  // CHANGE PRICE
+  // ====================================================
+
+  function changePrice() {
+
+    if (selectedIndex < 0) {
+      return;
+    }
+
+    const input =
+      document.getElementById(
+        "documentNewPrice"
+      );
+
+    const panel =
+      document.getElementById(
+        "documentPricePanel"
+      );
+
+
+    input.value =
+      Number(
+        saleItems[
+          selectedIndex
+        ].sell_price || 0
+      ).toFixed(2);
+
+
+    panel.classList.add(
+      "show",
+      "keyboardOpen"
+    );
+
+    setEditLocked(true);
+
+
+    // Выделяем всю цену
+
+    input.focus();
+
+    input.select();
+
+
+    showKeyboard(
+      input,
+      {
+        onEnter:
+          savePrice,
+
+        onClose:
+          closePricePanel,
+      }
+    );
+  }
+
+
+  // ====================================================
+  // ITEM CLICK
+  // ====================================================
+
+  itemsBody.addEventListener(
+    "click",
+    (event) => {
+
+      if (
+        saving ||
+        loadingDocument ||
+        document
+          .getElementById(
+            "keyboard"
+          )
+          ?.classList.contains(
+            "show"
+          )
+      ) {
+        return;
+      }
+
+
+      const row =
+        event.target.closest(
+          "tr[data-index]"
+        );
+
+      if (!row) {
+        return;
+      }
+
+
+      selectedIndex =
+        Number(
+          row.dataset.index
+        );
+
+      drawTable();
+
+
+      setTimeout(
+        () =>
+          showChoice(
+            "Выберите действие",
+            [
+              [
+                "Изменить цену",
+                changePrice,
+              ],
+
+              [
+                "Удалить товар",
+                () =>
+                  showConfirm(
+                    "Удалить товар?",
+                    "Выбранный товар будет удалён",
+                    deleteSelected,
+                    cancelSelection
+                  ),
+              ],
+
+              [
+                "Отмена",
+                cancelSelection,
+              ],
+            ]
+          ),
+        200
+      );
+    }
+  );
+
+
+  // ====================================================
+  // BARCODE ERROR
+  // ====================================================
+
+  function resetBarcodeError() {
+
+    if (!barcodeError) {
+      return;
+    }
+
+    barcodeError = false;
+
+    barcode.value = "";
+
+    barcode.classList.remove(
+      "saleBarcodeNotFound"
+    );
+  }
+
+
+  // ====================================================
+  // LOOKUP BARCODE
+  // ====================================================
+
+  async function lookupBarcode() {
+
+    const code =
+      barcode.value.trim();
+
+    if (code.length !== 5) {
+      return;
+    }
+
+
+    hideKeyboard();
+
+
+    const sequence =
+      ++lookupSequence;
+
+
+    let result;
+
+    try {
+
+      result =
+        await getProductByBarcode(
+          code
+        );
+
+    } catch {
+
+      result = {
+        success: false,
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    if (
+      sequence !==
+      lookupSequence
+    ) {
+      return;
+    }
+
+
+    if (!result.success) {
+
+      barcodeError = true;
+
+      barcode.value =
+        "Код не найден";
+
+      barcode.classList.add(
+        "saleBarcodeNotFound"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // ADD PRODUCT
+    // --------------------------------------------------
+
+    saleItems.push({
+      barcode:
+        result.data.barcode,
+
+      name:
+        result.data.name,
+
+      buy_price:
+        Number(
+          result.data.buy_price || 0
+        ),
+
+      sell_price:
+        Number(
+          result.data.sell_price || 0
+        ),
+    });
+
+
+    barcode.value = "";
+
+    barcode.classList.remove(
+      "saleBarcodeNotFound"
+    );
+
+    markChanged();
+
+    drawTable();
+  }
+
+
+  // ====================================================
+  // BARCODE INPUT
+  // ====================================================
+
+  barcode.addEventListener(
+    "input",
+    () => {
+
+      if (barcodeError) {
+        return;
+      }
+
+
+      if (
+        barcode.value.length > 5
+      ) {
+        barcode.value =
+          barcode.value.slice(
+            0,
+            5
+          );
+      }
+
+
+      if (
+        barcode.value.length === 5
+      ) {
+        lookupBarcode();
+      }
+    }
+  );
+
+
+  // ====================================================
+  // BARCODE CLICK
+  // ====================================================
+
+  barcode.addEventListener(
+    "click",
+    () => {
+
+      if (
+        saving ||
+        loadingDocument
+      ) {
+        return;
+      }
+
+      resetBarcodeError();
+
+      showKeyboard(
+        barcode
+      );
+    }
+  );
+
+
+  // ====================================================
+  // SAVE DOCUMENT
+  // ====================================================
+
+  async function saveDocument() {
+
+    if (
+      saving ||
+      loadingDocument ||
+      !changed ||
+      saleItems.length === 0
+    ) {
+      return;
+    }
+
+
+    const id =
+      Number(saleId);
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // DATA
+    // --------------------------------------------------
+
+    const items =
+      saleItems.map(
+        (item) => ({
+          barcode:
+            Number(
+              item.barcode
+            ),
+
+          name:
+            item.name,
+
+          buy_price:
+            Number(
+              item.buy_price || 0
+            ),
+
+          sell_price:
+            Number(
+              item.sell_price || 0
+            ),
+        })
+      );
+
+
+    // --------------------------------------------------
+    // LOCK
+    // --------------------------------------------------
+
+    saving = true;
+
+    hideKeyboard();
+
+    setEditLocked(true);
+
+
+    // --------------------------------------------------
+    // REQUEST
+    // --------------------------------------------------
+
+    let result;
+
+    try {
+
+      result =
+        await updateSale(
+          id,
+          items
+        );
+
+    } catch {
+
+      result = {
+        success: false,
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    if (!result.success) {
+
+      saving = false;
+
+      setEditLocked(false);
+
+      showMessage(
+        "Ошибка документа",
+        result.error?.message ||
+          "Не удалось перезаписать документ"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // SUCCESS
+    // --------------------------------------------------
+
+    saving = false;
+
+    changed = false;
+
+    setEditLocked(false);
+
+    updateTotals();
+
+
+    showMessage(
+      "Документ сохранён",
+      `Документ №${id} перезаписан`
+    );
+  }
+
+
+  // ====================================================
+  // SAVE BUTTON
+  // ====================================================
+
+  saveButton.addEventListener(
+    "click",
+    saveDocument
+  );
+
+
+  // ====================================================
+  // BACK
+  // ====================================================
+
+  backButton.addEventListener(
+    "click",
+    () => {
+
+      hideKeyboard();
+
+      showJournal();
+    }
+  );
+
+
+  // ====================================================
+  // LOAD
+  // ====================================================
+
+  loadDocument();
+}
+</file>
+
+<file path="public/assets/.gitkeep">
+
+</file>
+
+<file path="public/js/components/dialogs.js">
+export function dialogsHtml() {
+  return `
+    <div id="choiceOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="choiceTitle" class="dialogTitle"></div><div id="choiceButtons" class="dialogButtons"></div></div></div>
+    <div id="confirmOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="confirmTitle" class="dialogTitle"></div><div id="confirmText" class="dialogText"></div><div class="dialogButtons dialogButtonsRow"><button id="confirmYes" class="dialogButton" type="button">Да</button><button id="confirmNo" class="dialogButton" type="button">Нет</button></div></div></div>
+    <div id="messageOverlay" class="dialogOverlay" aria-hidden="true"><div class="dialogBox"><div id="messageTitle" class="dialogTitle"></div><div id="messageText" class="dialogText"></div><div class="dialogButtons"><button id="messageOk" class="dialogButton" type="button">OK</button></div></div></div>`;
+}
+
+export function showChoice(title, choices) {
+  const overlay = document.getElementById("choiceOverlay"), titleElement = document.getElementById("choiceTitle"), buttons = document.getElementById("choiceButtons"); if (!overlay || !titleElement || !buttons) return;
+  titleElement.textContent = title; buttons.innerHTML = "";
+  choices.forEach(([text, action]) => { const button = document.createElement("button"); button.type = "button"; button.className = "dialogButton"; button.textContent = text; button.addEventListener("click", () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); if (typeof action === "function") action(); }); buttons.appendChild(button); });
+  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
+}
+
+export function showConfirm(title, text, onYes, onNo = null) {
+  const overlay = document.getElementById("confirmOverlay"), titleElement = document.getElementById("confirmTitle"), textElement = document.getElementById("confirmText"), yes = document.getElementById("confirmYes"), no = document.getElementById("confirmNo"); if (!overlay || !titleElement || !textElement || !yes || !no) return;
+  titleElement.textContent = title; textElement.textContent = text;
+  const close = () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); };
+  yes.onclick = () => { close(); if (typeof onYes === "function") onYes(); }; no.onclick = () => { close(); if (typeof onNo === "function") onNo(); };
+  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
+}
+
+export function showMessage(title, text, onOk = null) {
+  const overlay = document.getElementById("messageOverlay"), titleElement = document.getElementById("messageTitle"), textElement = document.getElementById("messageText"), ok = document.getElementById("messageOk"); if (!overlay || !titleElement || !textElement || !ok) return;
+  titleElement.textContent = title; textElement.textContent = text;
+  ok.onclick = () => { overlay.classList.remove("show"); overlay.setAttribute("aria-hidden", "true"); if (typeof onOk === "function") onOk(); };
+  overlay.classList.add("show"); overlay.setAttribute("aria-hidden", "false");
+}
+</file>
+
+<file path="public/js/components/keyboard.js">
+let activeInput = null;
+let onEnter = null;
+let onClose = null;
+let replaceOnNextInput = false;
+
+
+// ======================================================
+// KEYBOARD HTML
+// ======================================================
+
+export function keyboardHtml() {
+  return `
+    <div id="keyboard" class="keyboard" aria-hidden="true">
+
+      <button class="key" data-key="1">1</button>
+      <button class="key" data-key="2">2</button>
+      <button class="key" data-key="3">3</button>
+      <button class="key keyDelete" data-action="delete">⌫</button>
+
+      <button class="key" data-key="4">4</button>
+      <button class="key" data-key="5">5</button>
+      <button class="key" data-key="6">6</button>
+      <button class="key keyClear" data-action="clear">C</button>
+
+      <button class="key" data-key="7">7</button>
+      <button class="key" data-key="8">8</button>
+      <button class="key" data-key="9">9</button>
+      <button class="key keyOk" data-action="ok">✓</button>
+
+      <button class="key" data-key=".">.</button>
+      <button class="key" data-key="0">0</button>
+      <button class="key" data-key="00">00</button>
+      <button class="key keyClose" data-action="close">✕</button>
+
+    </div>
+  `;
+}
+
+
+// ======================================================
+// INPUT EVENT
+// ======================================================
+
+function emitInput() {
+  activeInput?.dispatchEvent(
+    new Event("input", {
+      bubbles: true,
+    })
+  );
+}
+
+
+// ======================================================
+// ADD KEY
+// ======================================================
+
+function addKey(key) {
+  if (!activeInput) {
+    return;
+  }
+
+  // Если значение было выделено —
+  // первая цифра полностью заменяет его.
+  if (replaceOnNextInput) {
+    activeInput.value = key;
+    replaceOnNextInput = false;
+  } else {
+    // Все последующие цифры добавляем справа.
+    activeInput.value += key;
+  }
+
+  emitInput();
+}
+
+
+// ======================================================
+// DELETE LAST CHARACTER
+// ======================================================
+
+function deleteLast() {
+  if (!activeInput) {
+    return;
+  }
+
+  // После удаления режим замены больше не нужен.
+  replaceOnNextInput = false;
+
+  activeInput.value =
+    activeInput.value.slice(0, -1);
+
+  emitInput();
+}
+
+
+// ======================================================
+// CLEAR
+// ======================================================
+
+function clearInput() {
+  if (!activeInput) {
+    return;
+  }
+
+  activeInput.value = "";
+  replaceOnNextInput = false;
+
+  emitInput();
+}
+
+
+// ======================================================
+// SHOW KEYBOARD
+// ======================================================
+
+export function showKeyboard(input, options = {}) {
+  activeInput = input;
+
+  onEnter = options.onEnter || null;
+  onClose = options.onClose || null;
+
+  // Проверяем, выделено ли всё значение.
+  replaceOnNextInput =
+    input.value.length > 0 &&
+    input.selectionStart === 0 &&
+    input.selectionEnd === input.value.length;
+
+  const keyboard =
+    document.getElementById("keyboard");
+
+  keyboard?.classList.add("show");
+
+  keyboard?.setAttribute(
+    "aria-hidden",
+    "false"
+  );
+}
+
+
+// ======================================================
+// HIDE KEYBOARD
+// ======================================================
+
+export function hideKeyboard() {
+  const keyboard =
+    document.getElementById("keyboard");
+
+  keyboard?.classList.remove("show");
+
+  keyboard?.setAttribute(
+    "aria-hidden",
+    "true"
+  );
+
+  const closeAction = onClose;
+
+  activeInput = null;
+  onEnter = null;
+  onClose = null;
+  replaceOnNextInput = false;
+
+  closeAction?.();
+}
+
+
+// ======================================================
+// INIT KEYBOARD
+// ======================================================
+
+export function initKeyboard() {
+  const keyboard =
+    document.getElementById("keyboard");
+
+  if (!keyboard) {
+    return;
+  }
+
+  keyboard.addEventListener(
+    "click",
+    (event) => {
+      const button =
+        event.target.closest("button");
+
+      if (!button || !activeInput) {
+        return;
+      }
+
+
+      // =================================================
+      // NUMBER / DOT
+      // =================================================
+
+      if (button.dataset.key !== undefined) {
+        addKey(button.dataset.key);
+        return;
+      }
+
+
+      // =================================================
+      // ACTIONS
+      // =================================================
+
+      switch (button.dataset.action) {
+
+        case "delete":
+          deleteLast();
+          break;
+
+
+        case "clear":
+          clearInput();
+          break;
+
+
+        case "ok": {
+          const enterAction = onEnter;
+
+          enterAction?.();
+
+          hideKeyboard();
+
+          break;
+        }
+
+
+        case "close":
+          hideKeyboard();
+          break;
+      }
+    }
+  );
+}
+</file>
+
+<file path="public/js/pages/home.js">
+import { authLogout } from "../api.js";
+
+import {
+  currentUser,
+  setCurrentUser,
+  hasPermission,
+  escapeHtml,
+} from "../state.js";
+
+
+function menuItem(
+  permission,
+  label,
+  action = ""
+) {
+  if (!hasPermission(permission)) {
+    return "";
+  }
+
+  return `
+    <button
+      class="menu-item"
+      type="button"
+      ${action ? `data-action="${action}"` : ""}
+    >
+      ${label}
+    </button>
+  `;
+}
+
+
+export function showHome(app, routes) {
+
+  app.innerHTML = `
+    <main class="home-page">
+
+      <header class="hero-header">
+
+        <div class="title">
+          Котопанда v2+
+        </div>
+
+        <div class="current-user">
+          ${escapeHtml(
+            currentUser?.name || "Пользователь"
+          )}
+        </div>
+
+      </header>
+
+
+      <section class="menu">
+
+        ${menuItem(
+          "sale.create",
+          "💰 Реализация",
+          "sale"
+        )}
+
+        ${menuItem(
+          "product.create",
+          "📦 Приход",
+          "income"
+        )}
+
+        ${menuItem(
+          "journal.read",
+          "📋 Журнал реализации",
+          "journal"
+        )}
+
+        ${menuItem(
+          "report.read",
+          "∑ Отчёт продаж",
+          "report"
+        )}
+
+        ${menuItem(
+          "event.read",
+          "🕘 Журнал событий",
+          "log"
+        )}
+
+
+        ${menuItem(
+          "cash.kotopanda",
+          "🐼 Касса Котопанда",
+          "cashKotopanda"
+        )}
+
+        ${menuItem(
+          "cash.elitka",
+          "☕ Касса Элитка",
+          "cashElitka"
+        )}
+
+
+        <button
+          id="logoutButton"
+          class="menu-item logout"
+          type="button"
+        >
+          🚪 Выйти
+        </button>
+
+      </section>
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // EXISTING ROUTES
+  // ====================================================
+
+  app
+    .querySelector('[data-action="sale"]')
+    ?.addEventListener(
+      "click",
+      routes.sale
+    );
+
+  app
+    .querySelector('[data-action="income"]')
+    ?.addEventListener(
+      "click",
+      routes.income
+    );
+
+  app
+    .querySelector('[data-action="journal"]')
+    ?.addEventListener(
+      "click",
+      routes.journal
+    );
+
+  app
+    .querySelector('[data-action="report"]')
+    ?.addEventListener(
+      "click",
+      routes.report
+    );
+
+  app
+    .querySelector('[data-action="log"]')
+    ?.addEventListener(
+      "click",
+      routes.log
+    );
+
+
+  // ====================================================
+  // CASH ROUTES
+  // ====================================================
+
+  app
+    .querySelector(
+      '[data-action="cashKotopanda"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.cashKotopanda
+    );
+
+  app
+    .querySelector(
+      '[data-action="cashElitka"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.cashElitka
+    );
+
+
+  // ====================================================
+  // LOGOUT
+  // ====================================================
+
+  document
+    .getElementById("logoutButton")
+    .addEventListener(
+      "click",
+      async () => {
+
+        try {
+          await authLogout();
+        } finally {
+          setCurrentUser(null);
+          routes.login();
+        }
+
+      }
+    );
+}
+</file>
+
+<file path="public/js/pages/log.js">
+import { getEvents } from "../api.js";
+
+import {
+  dialogsHtml,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  today,
+  escapeHtml,
+} from "../state.js";
+
+
+// ======================================================
+// EVENT LOG
+// ======================================================
+
+export function showLog(app, showHome) {
+  const date = today();
+
+  app.innerHTML = `
+    <main class="sale-page document-page logPage">
+
+      <!-- BACK -->
+
+      <button
+        id="logBackButton"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+
+      <!-- HEADER -->
+
+      <div class="saleHeader">
+        <h2 class="saleTitle">
+          Журнал событий
+        </h2>
+      </div>
+
+
+      <!-- PERIOD -->
+
+      <div class="journalFilter">
+
+        <input
+          id="logFrom"
+          type="date"
+          class="saleDate"
+          value="${date}"
+        >
+
+        <input
+          id="logTo"
+          type="date"
+          class="saleDate"
+          value="${date}"
+        >
+
+      </div>
+
+
+      <!-- SHOW -->
+
+      <button
+        id="logShowButton"
+        class="saleButton documentShowButton"
+        type="button"
+      >
+        Показать
+      </button>
+
+
+      <!-- TABLE -->
+
+      <table class="saleTable logTable">
+
+        <thead>
+          <tr>
+            <th>Дата / время</th>
+            <th>Событие</th>
+          </tr>
+        </thead>
+
+        <tbody id="logRows"></tbody>
+
+      </table>
+
+
+      <!-- LOADING -->
+
+      <div
+        id="logLoading"
+        class="loadingOverlay"
+        aria-hidden="true"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+
+      ${dialogsHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const from =
+    document.getElementById("logFrom");
+
+  const to =
+    document.getElementById("logTo");
+
+  const button =
+    document.getElementById("logShowButton");
+
+  const back =
+    document.getElementById("logBackButton");
+
+  const rows =
+    document.getElementById("logRows");
+
+  const loading =
+    document.getElementById("logLoading");
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  let busy = false;
+
+
+  // ====================================================
+  // EVENT NAMES
+  // ====================================================
+
+  const eventNames = {
+    PRODUCT_CREATE: "Создан товар",
+    SALE_CREATE: "Продажа",
+    SALE_UPDATE: "Изменена продажа",
+  };
+
+
+  function formatEvent(type) {
+    return eventNames[type] || type || "";
+  }
+
+
+  // ====================================================
+  // DATE / TIME
+  // D1 CURRENT_TIMESTAMP хранится в UTC
+  // ====================================================
+
+  function parseDate(value) {
+    if (!value) {
+      return null;
+    }
+
+    const source =
+      String(value).trim();
+
+    const parsed =
+      new Date(
+        source.replace(" ", "T") + "Z"
+      );
+
+    if (
+      Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
+      return null;
+    }
+
+    return parsed;
+  }
+
+
+  // ====================================================
+  // DETAILS PARSER
+  // ====================================================
+
+  function parseDetails(value) {
+    const result = {};
+
+    String(value ?? "")
+      .split(";")
+      .forEach((part) => {
+
+        const index =
+          part.indexOf("=");
+
+        if (index < 0) {
+          return;
+        }
+
+        const key =
+          part
+            .slice(0, index)
+            .trim();
+
+        const val =
+          part
+            .slice(index + 1)
+            .trim();
+
+        result[key] = val;
+      });
+
+    return result;
+  }
+
+
+  // ====================================================
+  // FORMAT DETAILS
+  // ====================================================
+
+  function formatDetails(event) {
+    const details =
+      parseDetails(
+        event.details
+      );
+
+
+    // --------------------------------------------------
+    // SALE CREATE / UPDATE
+    // --------------------------------------------------
+
+    if (
+      event.event_type === "SALE_CREATE" ||
+      event.event_type === "SALE_UPDATE"
+    ) {
+      const parts = [];
+
+
+      // DOCUMENT
+
+      if (details.sale_id) {
+        parts.push(
+          `Документ №${details.sale_id}`
+        );
+      }
+
+
+      // SUM
+
+      if (details.sum) {
+        const sum =
+          Number(details.sum);
+
+        parts.push(
+          Number.isFinite(sum)
+            ? `сумма ${sum.toFixed(2)}`
+            : `сумма ${details.sum}`
+        );
+      }
+
+
+      // ITEMS
+
+      if (details.items) {
+        parts.push(
+          `позиций ${details.items}`
+        );
+      }
+
+
+      return parts.join(" · ");
+    }
+
+
+    // --------------------------------------------------
+    // PRODUCT CREATE
+    // --------------------------------------------------
+
+    if (
+      event.event_type === "PRODUCT_CREATE"
+    ) {
+      const parts = [];
+
+
+      // BARCODE
+
+      if (details.barcode) {
+        parts.push(
+          `Код ${details.barcode}`
+        );
+      }
+
+
+      // NAME
+
+      if (details.name) {
+        parts.push(
+          details.name
+        );
+      }
+
+
+      // BUY PRICE
+
+      if (details.buy_price) {
+        const buyPrice =
+          Number(details.buy_price);
+
+        parts.push(
+          Number.isFinite(buyPrice)
+            ? `приход ${buyPrice.toFixed(2)}`
+            : `приход ${details.buy_price}`
+        );
+      }
+
+
+      // SELL PRICE
+
+      if (details.sell_price) {
+        const sellPrice =
+          Number(details.sell_price);
+
+        parts.push(
+          Number.isFinite(sellPrice)
+            ? `продажа ${sellPrice.toFixed(2)}`
+            : `продажа ${details.sell_price}`
+        );
+      }
+
+
+      return parts.join(" · ");
+    }
+
+
+    // --------------------------------------------------
+    // UNKNOWN EVENT
+    // --------------------------------------------------
+
+    return String(
+      event.details ?? ""
+    );
+  }
+
+
+  // ====================================================
+  // BUSY
+  // ====================================================
+
+  function setBusy(value) {
+    busy = value;
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+    loading.setAttribute(
+      "aria-hidden",
+      value
+        ? "false"
+        : "true"
+    );
+
+    button.disabled = value;
+    back.disabled = value;
+
+    from.disabled = value;
+    to.disabled = value;
+  }
+
+
+  // ====================================================
+  // DRAW
+  // ====================================================
+
+  function drawEvents(data) {
+
+    // --------------------------------------------------
+    // EMPTY
+    // --------------------------------------------------
+
+    if (!data.length) {
+      rows.innerHTML = `
+        <tr>
+          <td
+            colspan="2"
+            class="logEmpty"
+          >
+            Событий нет
+          </td>
+        </tr>
+      `;
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // ROWS
+    // --------------------------------------------------
+
+    rows.innerHTML =
+      data.map((event) => {
+
+        const parsed =
+          parseDate(
+            event.created_at
+          );
+
+
+        // ----------------------------------------------
+        // DATE
+        // ----------------------------------------------
+
+        let eventDate = "";
+
+        if (parsed) {
+          eventDate =
+            parsed.toLocaleDateString(
+              "ru-RU",
+              {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              }
+            );
+        }
+
+
+        // ----------------------------------------------
+        // TIME
+        // ----------------------------------------------
+
+        let eventTime = "";
+
+        if (parsed) {
+          eventTime =
+            parsed.toLocaleTimeString(
+              "ru-RU",
+              {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }
+            );
+        }
+
+
+        // ----------------------------------------------
+        // EVENT
+        // ----------------------------------------------
+
+        const eventName =
+          formatEvent(
+            event.event_type
+          );
+
+
+        // ----------------------------------------------
+        // DETAILS
+        // ----------------------------------------------
+
+        const details =
+          formatDetails(event);
+
+
+        // ----------------------------------------------
+        // HTML
+        // ----------------------------------------------
+
+        return `
+          <tr>
+
+            <!-- DATE / TIME / USER -->
+
+            <td class="logInfo">
+
+              <div class="logDate">
+                ${escapeHtml(eventDate)}
+              </div>
+
+              <div class="logTime">
+                ${escapeHtml(eventTime)}
+              </div>
+
+              <div class="logUsername">
+                ${escapeHtml(
+                  event.username ?? ""
+                )}
+              </div>
+
+            </td>
+
+
+            <!-- EVENT / DETAILS -->
+
+            <td class="logEvent">
+
+              <div class="logEventName">
+                ${escapeHtml(eventName)}
+              </div>
+
+              ${
+                details
+                  ? `
+                    <div class="logEventDetails">
+                      ${escapeHtml(details)}
+                    </div>
+                  `
+                  : ""
+              }
+
+            </td>
+
+          </tr>
+        `;
+      }).join("");
+  }
+
+
+  // ====================================================
+  // LOAD LOG
+  // ====================================================
+
+  async function loadLog() {
+
+    if (busy) {
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // VALIDATE PERIOD
+    // --------------------------------------------------
+
+    if (
+      !from.value ||
+      !to.value ||
+      from.value > to.value
+    ) {
+      showMessage(
+        "Журнал событий",
+        "Некорректный период"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // LOADING
+    // --------------------------------------------------
+
+    setBusy(true);
+
+
+    // --------------------------------------------------
+    // REQUEST
+    // --------------------------------------------------
+
+    let result;
+
+    try {
+
+      result =
+        await getEvents(
+          from.value,
+          to.value
+        );
+
+    } catch {
+
+      result = {
+        success: false,
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    // --------------------------------------------------
+    // SUCCESS
+    // --------------------------------------------------
+
+    if (result.success) {
+
+      const data =
+        Array.isArray(result.data)
+          ? result.data
+          : [];
+
+      drawEvents(data);
+    }
+
+
+    // --------------------------------------------------
+    // UNLOCK
+    // --------------------------------------------------
+
+    setBusy(false);
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    if (!result.success) {
+      showMessage(
+        "Ошибка журнала",
+        result.error?.message ||
+          "Не удалось загрузить журнал событий"
+      );
+    }
+  }
+
+
+  // ====================================================
+  // SHOW BUTTON
+  // ====================================================
+
+  button.addEventListener(
+    "click",
+    loadLog
+  );
+
+
+  // ====================================================
+  // BACK
+  // ====================================================
+
+  back.addEventListener(
+    "click",
+    showHome
+  );
+
+
+  // ====================================================
+  // INITIAL LOAD
+  // ====================================================
+
+  loadLog();
+}
+</file>
+
+<file path="public/js/pages/login.js">
+import { authLogin, authMe } from "../api.js";
+import { setCurrentUser } from "../state.js";
+export function showLogin(app, showHome){
+  app.innerHTML=`<main class="login-page"><section class="login-card"><div class="login-logo">Котопанда v2+</div><h1>Вход в систему</h1><form id="loginForm" class="login-form"><label>Логин<input name="username" autocomplete="username" required></label><label>Пароль<input name="password" type="password" autocomplete="current-password" required></label><div id="loginError" class="error"></div><button id="loginButton" type="submit">ВОЙТИ</button></form></section></main>`;
+  const form=document.getElementById("loginForm"),error=document.getElementById("loginError"),button=document.getElementById("loginButton");
+  form.addEventListener("submit",async event=>{event.preventDefault();error.textContent="";button.disabled=true;button.textContent="ВХОД...";const data=new FormData(form);try{const login=await authLogin(String(data.get("username")||"").trim(),String(data.get("password")||""));if(!login.success){error.textContent=login.error?.message||"Ошибка авторизации";return}const me=await authMe();if(!me.success){error.textContent=me.error?.message||"Не удалось получить пользователя";return}setCurrentUser(me.data);showHome()}catch{error.textContent="Нет связи с сервером"}finally{button.disabled=false;button.textContent="ВОЙТИ"}});
+}
+</file>
+
+<file path="public/js/pages/report.js">
+import { getSalesReport } from "../api.js";
+
+import {
+  dialogsHtml,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  hasPermission,
+  today,
+  escapeHtml,
+} from "../state.js";
+
+
+// ======================================================
+// SALES REPORT
+// ======================================================
+
+export function showReport(app, showHome) {
+  const canChangeDates = hasPermission("report.date.change");
+  const date = today();
+
+  app.innerHTML = `
+    <main class="sale-page document-page journalPage">
+
+      <button
+        id="reportBackButton"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+      <div class="saleHeader">
+        <h2 class="saleTitle">Отчёт продаж</h2>
+      </div>
+
+
+      <!-- PERIOD -->
+
+      <div class="journalFilter">
+
+        <input
+          id="reportFrom"
+          type="date"
+          class="saleDate"
+          value="${date}"
+          ${canChangeDates ? "" : "disabled"}
+        >
+
+        <input
+          id="reportTo"
+          type="date"
+          class="saleDate"
+          value="${date}"
+          ${canChangeDates ? "" : "disabled"}
+        >
+
+      </div>
+
+
+      <!-- SHOW BUTTON -->
+
+      <button
+        id="reportShowButton"
+        class="saleButton documentShowButton"
+        type="button"
+      >
+        Показать
+      </button>
+
+
+      <!-- REPORT TABLE -->
+
+      <table class="saleTable">
+
+        <thead>
+          <tr>
+            <th>ДОК</th>
+            <th>ТОВАР</th>
+            <th>ПРОД</th>
+          </tr>
+        </thead>
+
+        <tbody id="reportRows"></tbody>
+
+      </table>
+
+
+      <!-- TOTALS -->
+
+      <div class="reportTotals">
+
+        <div class="reportSalesTotal">
+          Сумма:
+          <span id="reportSalesTotal">0.00</span>
+        </div>
+
+        <div
+          id="reportBuyTotal"
+          class="reportBuyTotal"
+        >
+          0
+        </div>
+
+      </div>
+
+
+      <!-- LOADING -->
+
+      <div
+        id="reportLoading"
+        class="loadingOverlay"
+        aria-hidden="true"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+      ${dialogsHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const from =
+    document.getElementById("reportFrom");
+
+  const to =
+    document.getElementById("reportTo");
+
+  const button =
+    document.getElementById("reportShowButton");
+
+  const back =
+    document.getElementById("reportBackButton");
+
+  const rows =
+    document.getElementById("reportRows");
+
+  const loading =
+    document.getElementById("reportLoading");
+
+  const salesTotal =
+    document.getElementById("reportSalesTotal");
+
+  const buyTotal =
+    document.getElementById("reportBuyTotal");
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  let busy = false;
+
+
+  // ====================================================
+  // LOADING STATE
+  // ====================================================
+
+  function setBusy(value) {
+    busy = value;
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+    loading.setAttribute(
+      "aria-hidden",
+      value ? "false" : "true"
+    );
+
+    button.disabled = value;
+    back.disabled = value;
+
+    from.disabled =
+      value || !canChangeDates;
+
+    to.disabled =
+      value || !canChangeDates;
+  }
+
+
+  // ====================================================
+  // DRAW REPORT
+  // ====================================================
+
+  function drawReport(data) {
+
+    // --------------------------------------------------
+    // TABLE
+    // --------------------------------------------------
+
+    rows.innerHTML = data
+      .map(
+        (item) => `
+          <tr>
+
+            <td>
+              ${escapeHtml(item.doc)}
+            </td>
+
+            <td>
+              ${escapeHtml(item.name)}
+            </td>
+
+            <td>
+              ${Number(
+                item.sell_price || 0
+              ).toFixed(2)}
+            </td>
+
+          </tr>
+        `
+      )
+      .join("");
+
+
+    // --------------------------------------------------
+    // SALES TOTAL
+    // --------------------------------------------------
+
+    const totalSell = data.reduce(
+      (total, item) =>
+        total +
+        Number(item.sell_price || 0),
+      0
+    );
+
+    salesTotal.textContent =
+      totalSell.toFixed(2);
+
+
+    // --------------------------------------------------
+    // BUY TOTAL
+    // --------------------------------------------------
+
+    const totalBuy = data.reduce(
+      (total, item) =>
+        total +
+        Number(item.buy_price || 0),
+      0
+    );
+
+    // Скрытое отображение:
+    //
+    // 222.56 → 22256
+    // 125.05 → 12505
+
+    buyTotal.textContent =
+      String(
+        Math.round(totalBuy * 100)
+      );
+  }
+
+
+  // ====================================================
+  // LOAD REPORT
+  // ====================================================
+
+  async function loadReport() {
+
+    if (busy) {
+      return;
+    }
+
+    if (
+      !from.value ||
+      !to.value ||
+      from.value > to.value
+    ) {
+      showMessage(
+        "Отчёт продаж",
+        "Некорректный период"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // START LOADING
+    // --------------------------------------------------
+
+    setBusy(true);
+
+    let result;
+
+    try {
+
+      result =
+        await getSalesReport(
+          from.value,
+          to.value
+        );
+
+    } catch {
+
+      result = {
+        success: false,
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    // --------------------------------------------------
+    // SUCCESS
+    // --------------------------------------------------
+
+    if (result.success) {
+
+      const data =
+        Array.isArray(result.data)
+          ? result.data
+          : [];
+
+      drawReport(data);
+
+    }
+
+
+    // --------------------------------------------------
+    // END LOADING
+    // --------------------------------------------------
+
+    setBusy(false);
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    if (!result.success) {
+
+      showMessage(
+        "Ошибка отчёта",
+        result.error?.message ||
+          "Не удалось загрузить отчёт продаж"
+      );
+
+    }
+  }
+
+
+  // ====================================================
+  // EVENTS
+  // ====================================================
+
+  button.addEventListener(
+    "click",
+    loadReport
+  );
+
+  back.addEventListener(
+    "click",
+    showHome
+  );
+
+
+  // ====================================================
+  // FIRST LOAD
+  // ====================================================
+
+  loadReport();
+}
+</file>
+
+<file path="public/js/router.js">
+import { showLogin } from "./pages/login.js";
+import { showHome } from "./pages/home.js";
+import { showSale } from "./pages/sale.js";
+import { showIncome } from "./pages/income.js";
+import { showJournal } from "./pages/journal.js";
+import { showReport } from "./pages/report.js";
+import { showLog } from "./pages/log.js";
+import { showSaleDocument } from "./pages/saleDocument.js";
+
+import { showCash } from "./pages/cash.js";
+import { showCashDocument } from "./pages/cashDocument.js";
+
+
+let app = null;
+
+
+// ======================================================
+// INIT ROUTER
+// ======================================================
+
+export function initRouter(root) {
+  app = root;
+}
+
+
+// ======================================================
+// NAVIGATE
+// ======================================================
+
+export function navigate(route, params = {}) {
+  if (!app) {
+    throw new Error("Router is not initialized");
+  }
+
+  switch (route) {
+
+    // --------------------------------------------------
+    // LOGIN
+    // --------------------------------------------------
+
+    case "login":
+      showLogin(
+        app,
+        () => navigate("home")
+      );
+      break;
+
+
+    // --------------------------------------------------
+    // HOME
+    // --------------------------------------------------
+
+    case "home":
+      showHome(app, {
+        login: () =>
+          navigate("login"),
+
+        sale: () =>
+          navigate("sale"),
+
+        income: () =>
+          navigate("income"),
+
+        journal: () =>
+          navigate("journal"),
+
+        report: () =>
+          navigate("report"),
+
+        log: () =>
+          navigate("log"),
+
+        cashKotopanda: () =>
+          navigate("cashKotopanda"),
+
+        cashElitka: () =>
+          navigate("cashElitka"),
+      });
+      break;
+
+
+    // --------------------------------------------------
+    // SALE
+    // --------------------------------------------------
+
+    case "sale":
+      showSale(
+        app,
+        () => navigate("home")
+      );
+      break;
+
+
+    // --------------------------------------------------
+    // INCOME
+    // --------------------------------------------------
+
+    case "income":
+      showIncome(
+        app,
+        () => navigate("home")
+      );
+      break;
+
+
+    // --------------------------------------------------
+    // JOURNAL
+    // --------------------------------------------------
+
+    case "journal":
+      showJournal(
+        app,
+
+        // Назад
+        () => navigate("home"),
+
+        // Открыть документ
+        (saleId) =>
+          navigate(
+            "saleDocument",
+            { saleId }
+          )
+      );
+      break;
+
+
+    // --------------------------------------------------
+    // SALE DOCUMENT
+    // --------------------------------------------------
+
+    case "saleDocument":
+      showSaleDocument(
+        app,
+        params.saleId,
+
+        // Назад возвращаемся в журнал
+        () => navigate("journal")
+      );
+      break;
+
+
+    // --------------------------------------------------
+    // REPORT
+    // --------------------------------------------------
+
+    case "report":
+      showReport(
+        app,
+        () => navigate("home")
+      );
+      break;
+
+
+    // --------------------------------------------------
+    // LOG
+    // --------------------------------------------------
+
+    case "log":
+      showLog(
+        app,
+        () => navigate("home")
+      );
+      break;
+
+
+    // --------------------------------------------------
+    // CASH KOTOPANDA
+    // --------------------------------------------------
+
+    case "cashKotopanda":
+  showCash(
+    app,
+    () => navigate("home"),
+
+    (documentId) =>
+      navigate(
+        "cashDocument",
+        {
+          cashType: "KOTOPANDA",
+          cashTitle: "Касса Котопанда",
+          documentId,
+        }
+      ),
+
+    "KOTOPANDA",
+    "Касса Котопанда"
+  );
+  break;
+
+
+    // --------------------------------------------------
+    // CASH ELITKA
+    // --------------------------------------------------
+
+    case "cashElitka":
+  showCash(
+    app,
+    () => navigate("home"),
+
+    (documentId) =>
+      navigate(
+        "cashDocument",
+        {
+          cashType: "ELITKA",
+          cashTitle: "Касса Элитка",
+          documentId,
+        }
+      ),
+
+    "ELITKA",
+    "Касса Элитка"
+  );
+  break;
+
+
+  case "cashDocument":
+  showCashDocument(
+    app,
+    params.cashType,
+    params.cashTitle,
+    params.documentId,
+
+    () => {
+      if (
+        params.cashType === "ELITKA"
+      ) {
+        navigate("cashElitka");
+      } else {
+        navigate("cashKotopanda");
+      }
+    }
+  );
+  break;
+    // --------------------------------------------------
+    // DEFAULT
+    // --------------------------------------------------
+
+    default:
+      navigate("home");
+  }
+}
+</file>
+
+<file path="public/js/state.js">
+export let currentUser = null;
+
+
+// ======================================================
+// CURRENT USER
+// ======================================================
+
+export function setCurrentUser(user) {
+  currentUser = user;
+}
+
+
+// ======================================================
+// PERMISSIONS
+// ======================================================
+
+export function hasPermission(permission) {
+
+  if (!currentUser) {
+    return false;
+  }
+
+  const permissions =
+    Array.isArray(currentUser.permissions)
+      ? currentUser.permissions
+      : [];
+
+  if (
+    permissions.includes("*")
+  ) {
+    return true;
+  }
+
+  return permissions.includes(
+    permission
+  );
+}
+
+
+// ======================================================
+// TODAY — KYIV
+// YYYY-MM-DD
+// ======================================================
+
+export function today() {
+
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone: "Europe/Kyiv",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    )
+      .formatToParts(
+        new Date()
+      );
+
+  const year =
+    parts.find(
+      (part) =>
+        part.type === "year"
+    )?.value;
+
+  const month =
+    parts.find(
+      (part) =>
+        part.type === "month"
+    )?.value;
+
+  const day =
+    parts.find(
+      (part) =>
+        part.type === "day"
+    )?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+
+// ======================================================
+// ESCAPE HTML
+// ======================================================
+
+export function escapeHtml(value) {
+
+  return String(
+    value ?? ""
+  )
+    .replaceAll(
+      "&",
+      "&amp;"
+    )
+    .replaceAll(
+      "<",
+      "&lt;"
+    )
+    .replaceAll(
+      ">",
+      "&gt;"
+    )
+    .replaceAll(
+      '"',
+      "&quot;"
+    )
+    .replaceAll(
+      "'",
+      "&#039;"
+    );
+}
+
+
+// ======================================================
+// FORMAT DATE
+//
+// 2026-08-16
+// ->
+// 16.08.2026
+// ======================================================
+
+export function formatDate(value) {
+
+  const parts =
+    String(
+      value || ""
+    ).split("-");
+
+  if (
+    parts.length !== 3
+  ) {
+    return String(
+      value || ""
+    );
+  }
+
+  return (
+    `${parts[2]}.` +
+    `${parts[1]}.` +
+    `${parts[0]}`
+  );
+}
+</file>
+
+<file path="public/manifest.json">
+{
+  "name": "Котопанда POS",
+  "short_name": "Котопанда",
+  "description": "Клиент Котопанда POS",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#4ea6ff",
+  "icons": [
+    {
+      "src": "https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://pos-admin.lateshoy.workers.dev/assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
+</file>
+
+<file path="public/sw.js">
+const CACHE = "kotopanda-pos-v1";
+const APP_SHELL = [
+  "/",
+  "/index.html",
+  "/css/app.css",
+  "/js/app.js",
+  "/js/api.js",
+  "/manifest.json"
+];
+
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE).then(cache => cache.addAll(APP_SHELL))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", event => {
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then(response => response || caches.match("/index.html")))
+  );
+});
+</file>
+
+<file path="package.json">
+{
+  "name": "kotopanda-pos-client",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.118.0"
+  }
+}
+</file>
+
+<file path="public/js/pages/income.js">
+import { createProduct } from "../api.js";
+
+import {
+  keyboardHtml,
+  initKeyboard,
+  showKeyboard,
+  hideKeyboard,
+} from "../components/keyboard.js";
+
+import {
+  dialogsHtml,
+  showMessage,
+} from "../components/dialogs.js";
+
+
+// ======================================================
+// CREATE PRODUCT
+// ======================================================
+
+export function showIncome(app, showHome) {
+
+  // ====================================================
+  // PAGE
+  // ====================================================
+
+  app.innerHTML = `
+    <main class="sale-page document-page incomePage">
+
+      <!-- BACK -->
+
+      <button
+        id="incomeBackButton"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+
+      <!-- TITLE -->
+
+      <div class="incomeHeader">
+        <h2 class="saleTitle">
+          Создание товара
+        </h2>
+      </div>
+
+
+      <!-- NAME -->
+
+      <div class="incomeNameBlock">
+
+        <label
+          class="incomeLabel"
+          for="incomeName"
+        >
+          Наименование
+        </label>
+
+        <div class="incomeNameRow">
+
+          <input
+            id="incomeName"
+            class="incomeNameInput"
+            type="text"
+            autocomplete="off"
+            placeholder="Введите наименование"
+          >
+
+          <button
+            id="incomeMicButton"
+            class="incomeMicButton"
+            type="button"
+            disabled
+          >
+            🎤
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- PRICES -->
+
+      <div class="incomePrices">
+
+        <div class="incomePriceBlock">
+
+          <label
+            class="incomeLabel"
+            for="incomeBuyPrice"
+          >
+            Закупочная цена
+          </label>
+
+          <input
+            id="incomeBuyPrice"
+            class="incomePriceInput"
+            type="text"
+            inputmode="none"
+            value="0.00"
+            readonly
+          >
+
+        </div>
+
+
+        <div class="incomePriceBlock">
+
+          <label
+            class="incomeLabel"
+            for="incomeSellPrice"
+          >
+            Цена продажи
+          </label>
+
+          <input
+            id="incomeSellPrice"
+            class="incomePriceInput"
+            type="text"
+            inputmode="none"
+            value="0.00"
+            readonly
+          >
+
+        </div>
+
+      </div>
+
+
+      <!-- CREATE -->
+
+      <button
+        id="incomeCreateButton"
+        class="saleButton incomeCreateButton"
+        type="button"
+        disabled
+      >
+        Создать товар
+      </button>
+
+
+      <!-- LOADING -->
+
+      <div
+        id="incomeLoading"
+        class="loadingOverlay"
+        aria-hidden="true"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+
+      ${dialogsHtml()}
+      ${keyboardHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // KEYBOARD
+  // ====================================================
+
+  initKeyboard();
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const backButton =
+    document.getElementById("incomeBackButton");
+
+  const nameInput =
+    document.getElementById("incomeName");
+
+  const buyInput =
+    document.getElementById("incomeBuyPrice");
+
+  const sellInput =
+    document.getElementById("incomeSellPrice");
+
+  const createButton =
+    document.getElementById("incomeCreateButton");
+
+  const loading =
+    document.getElementById("incomeLoading");
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  let saving = false;
+
+
+  // ====================================================
+  // PRICE
+  // ====================================================
+
+  function parsePrice(value) {
+    const normalized = String(value ?? "")
+      .trim()
+      .replace(",", ".");
+
+    const price = Number(normalized);
+
+    if (
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      return null;
+    }
+
+    return price;
+  }
+
+
+  // ====================================================
+  // BUTTON STATE
+  // ====================================================
+
+  function updateCreateButton() {
+    const name = nameInput.value.trim();
+
+    const buyPrice =
+      parsePrice(buyInput.value);
+
+    const sellPrice =
+      parsePrice(sellInput.value);
+
+    createButton.disabled =
+      saving ||
+      !name ||
+      buyPrice === null ||
+      sellPrice === null;
+  }
+
+
+  // ====================================================
+  // BUSY
+  // ====================================================
+
+  function setBusy(value) {
+    saving = value;
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+    loading.setAttribute(
+      "aria-hidden",
+      value ? "false" : "true"
+    );
+
+    backButton.disabled = value;
+    nameInput.disabled = value;
+    buyInput.disabled = value;
+    sellInput.disabled = value;
+
+    updateCreateButton();
+  }
+
+
+  // ====================================================
+  // RESET
+  // ====================================================
+
+  function resetForm() {
+    nameInput.value = "";
+    buyInput.value = "0.00";
+    sellInput.value = "0.00";
+
+    updateCreateButton();
+  }
+
+
+  // ====================================================
+  // PRICE KEYBOARD
+  // ====================================================
+
+  function openPriceKeyboard(input) {
+    if (saving) {
+      return;
+    }
+
+    input.focus();
+
+    // Выделяем всю текущую цену.
+    // Первая введённая цифра заменит 0.00.
+
+    input.select();
+
+    showKeyboard(input, {
+
+      onEnter: () => {
+        updateCreateButton();
+
+        if (input === buyInput) {
+          setTimeout(() => {
+            openPriceKeyboard(sellInput);
+          }, 100);
+        } else {
+          hideKeyboard();
+        }
+      },
+
+      onClose: () => {
+        updateCreateButton();
+      },
+    });
+  }
+
+
+  // ====================================================
+  // PRICE EVENTS
+  // ====================================================
+
+  buyInput.addEventListener(
+    "click",
+    () => {
+      openPriceKeyboard(buyInput);
+    }
+  );
+
+
+  sellInput.addEventListener(
+    "click",
+    () => {
+      openPriceKeyboard(sellInput);
+    }
+  );
+
+
+  buyInput.addEventListener(
+    "input",
+    updateCreateButton
+  );
+
+
+  sellInput.addEventListener(
+    "input",
+    updateCreateButton
+  );
+
+
+  // ====================================================
+  // NAME
+  // ====================================================
+
+  nameInput.addEventListener(
+    "input",
+    updateCreateButton
+  );
+
+
+  // ====================================================
+  // CREATE PRODUCT
+  // ====================================================
+
+  async function saveProduct() {
+    if (saving) {
+      return;
+    }
+
+    const name =
+      nameInput.value.trim();
+
+    const buyPrice =
+      parsePrice(buyInput.value);
+
+    const sellPrice =
+      parsePrice(sellInput.value);
+
+
+    // --------------------------------------------------
+    // VALIDATION
+    // --------------------------------------------------
+
+    if (!name) {
+      showMessage(
+        "Создание товара",
+        "Введите наименование товара"
+      );
+
+      return;
+    }
+
+
+    if (buyPrice === null) {
+      showMessage(
+        "Создание товара",
+        "Введите закупочную цену"
+      );
+
+      return;
+    }
+
+
+    if (sellPrice === null) {
+      showMessage(
+        "Создание товара",
+        "Введите цену продажи"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // SAVE
+    // --------------------------------------------------
+
+    hideKeyboard();
+
+    setBusy(true);
+
+    let result;
+
+    try {
+      result = await createProduct({
+        name,
+        buy_price: buyPrice,
+        sell_price: sellPrice,
+      });
+    } catch {
+      result = {
+        success: false,
+        error: {
+          message: "Нет связи с сервером",
+        },
+      };
+    }
+
+    setBusy(false);
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    if (!result.success) {
+      showMessage(
+        "Ошибка создания товара",
+        result.error?.message ||
+          "Не удалось создать товар"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // SUCCESS
+    // --------------------------------------------------
+
+    const barcode =
+      result.data?.barcode;
+
+    resetForm();
+
+    showMessage(
+      "Товар создан",
+      barcode
+        ? `Штрихкод: ${barcode}`
+        : "Товар успешно создан"
+    );
+  }
+
+
+  // ====================================================
+  // CREATE
+  // ====================================================
+
+  createButton.addEventListener(
+    "click",
+    saveProduct
+  );
+
+
+  // ====================================================
+  // BACK
+  // ====================================================
+
+  backButton.addEventListener(
+    "click",
+    () => {
+      if (saving) {
+        return;
+      }
+
+      hideKeyboard();
+      showHome();
+    }
+  );
+
+
+  // ====================================================
+  // INITIAL
+  // ====================================================
+
+  updateCreateButton();
+}
+</file>
+
+<file path="public/js/pages/journal.js">
+import { getSalesJournal } from "../api.js";
+
+import {
+  dialogsHtml,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  hasPermission,
+  today,
+  escapeHtml,
+  formatDate,
+} from "../state.js";
+
+
+// ======================================================
+// SALES JOURNAL
+// ======================================================
+
+export function showJournal(
+  app,
+  showHome,
+  showSaleDocument
+) {
+  // ----------------------------------------------------
+  // PERMISSIONS
+  // ----------------------------------------------------
+
+  const canChangeDates =
+    hasPermission("journal.date.change");
+
+  const canOpenDocument =
+    hasPermission("journal.document.open");
+
+  const date = today();
+
+
+  // ====================================================
+  // PAGE
+  // ====================================================
+
+  app.innerHTML = `
+    <main class="sale-page document-page journalPage">
+
+      <button
+        id="journalBackButton"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+
+      <!-- HEADER -->
+
+      <div class="saleHeader">
+        <h2 class="saleTitle">
+          Журнал продаж
+        </h2>
+      </div>
+
+
+      <!-- PERIOD -->
+
+      <div class="journalFilter">
+
+        <input
+          id="journalFrom"
+          type="date"
+          class="saleDate"
+          value="${date}"
+          ${canChangeDates ? "" : "disabled"}
+        >
+
+        <input
+          id="journalTo"
+          type="date"
+          class="saleDate"
+          value="${date}"
+          ${canChangeDates ? "" : "disabled"}
+        >
+
+      </div>
+
+
+      <!-- SHOW BUTTON -->
+
+      <button
+        id="journalShowButton"
+        class="saleButton documentShowButton"
+        type="button"
+      >
+        Показать
+      </button>
+
+
+      <!-- JOURNAL TABLE -->
+
+      <table class="saleTable">
+
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Документ</th>
+            <th>Сумма</th>
+          </tr>
+        </thead>
+
+        <tbody id="journalRows"></tbody>
+
+      </table>
+
+
+      <!-- LOADING -->
+
+      <div
+        id="journalLoading"
+        class="loadingOverlay"
+        aria-hidden="true"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+
+      ${dialogsHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const from =
+    document.getElementById("journalFrom");
+
+  const to =
+    document.getElementById("journalTo");
+
+  const button =
+    document.getElementById("journalShowButton");
+
+  const back =
+    document.getElementById("journalBackButton");
+
+  const rows =
+    document.getElementById("journalRows");
+
+  const loading =
+    document.getElementById("journalLoading");
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  let busy = false;
+
+
+  // ====================================================
+  // BUSY STATE
+  // ====================================================
+
+  function setBusy(value) {
+    busy = value;
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+    loading.setAttribute(
+      "aria-hidden",
+      value ? "false" : "true"
+    );
+
+    button.disabled = value;
+    back.disabled = value;
+
+    from.disabled =
+      value || !canChangeDates;
+
+    to.disabled =
+      value || !canChangeDates;
+  }
+
+
+  // ====================================================
+  // DRAW JOURNAL
+  // ====================================================
+
+  function drawJournal(data) {
+    rows.innerHTML = data
+      .map(
+        (sale) => `
+          <tr
+            data-sale-id="${escapeHtml(sale.id)}"
+            class="${
+              canOpenDocument
+                ? "journalRow journalRowOpen"
+                : "journalRow"
+            }"
+          >
+
+            <td>
+              ${escapeHtml(
+                formatDate(sale.sale_date)
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(sale.id)}
+            </td>
+
+            <td>
+              ${Number(
+                sale.sum || 0
+              ).toFixed(2)}
+            </td>
+
+          </tr>
+        `
+      )
+      .join("");
+  }
+
+
+  // ====================================================
+  // LOAD JOURNAL
+  // ====================================================
+
+  async function loadJournal() {
+    if (busy) {
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // VALIDATE PERIOD
+    // --------------------------------------------------
+
+    if (
+      !from.value ||
+      !to.value ||
+      from.value > to.value
+    ) {
+      showMessage(
+        "Журнал продаж",
+        "Некорректный период"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // START LOADING
+    // --------------------------------------------------
+
+    setBusy(true);
+
+    let result;
+
+    try {
+      result =
+        await getSalesJournal(
+          from.value,
+          to.value
+        );
+    } catch {
+      result = {
+        success: false,
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+    }
+
+
+    // --------------------------------------------------
+    // SUCCESS
+    // --------------------------------------------------
+
+    if (result.success) {
+      const data =
+        Array.isArray(result.data)
+          ? result.data
+          : [];
+
+      drawJournal(data);
+    }
+
+
+    // --------------------------------------------------
+    // FINISH LOADING
+    // --------------------------------------------------
+
+    setBusy(false);
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    if (!result.success) {
+      showMessage(
+        "Ошибка журнала",
+        result.error?.message ||
+          "Не удалось загрузить журнал продаж"
+      );
+    }
+  }
+
+
+  // ====================================================
+  // OPEN SALE DOCUMENT
+  // ====================================================
+
+  rows.addEventListener(
+    "click",
+    (event) => {
+
+      // ------------------------------------------------
+      // Проверяем permission
+      // ------------------------------------------------
+
+      if (
+        busy ||
+        !canOpenDocument
+      ) {
+        return;
+      }
+
+
+      // ------------------------------------------------
+      // Находим строку документа
+      // ------------------------------------------------
+
+      const row =
+        event.target.closest(
+          "tr[data-sale-id]"
+        );
+
+      if (!row) {
+        return;
+      }
+
+
+      // ------------------------------------------------
+      // Получаем ID документа
+      // ------------------------------------------------
+
+      const saleId =
+        Number(row.dataset.saleId);
+
+      if (
+        !Number.isInteger(saleId) ||
+        saleId <= 0
+      ) {
+        return;
+      }
+
+
+      // ------------------------------------------------
+      // Открываем документ
+      // ------------------------------------------------
+
+      if (
+        typeof showSaleDocument ===
+        "function"
+      ) {        
+        showSaleDocument(saleId);
+      }
+    }
+  );
+
+
+  // ====================================================
+  // EVENTS
+  // ====================================================
+
+  button.addEventListener(
+    "click",
+    loadJournal
+  );
+
+
+  back.addEventListener(
+    "click",
+    showHome
+  );
+
+
+  // ====================================================
+  // FIRST LOAD
+  // ====================================================
+
+  loadJournal();
+}
+</file>
+
+<file path="public/js/pages/sale.js">
+import {
+  getProductByBarcode,
+  createSale,
+} from "../api.js";
+
+import {
+  keyboardHtml,
+  initKeyboard,
+  showKeyboard,
+  hideKeyboard,
+} from "../components/keyboard.js";
+
+import {
+  dialogsHtml,
+  showChoice,
+  showConfirm,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  hasPermission,
+  today,
+  escapeHtml,
+} from "../state.js";
+
+
+// ======================================================
+// SALE PAGE
+// ======================================================
+
+export function showSale(app, showHome) {
+  const canChangeDate = hasPermission("sale.date.change");
+
+  app.innerHTML = `
+    <main class="sale-page">
+
+      <button
+        id="saleBackButton"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+      <div class="saleHeader">
+
+        <h2 class="saleTitle">
+          Реализация
+        </h2>
+
+        <input
+          type="date"
+          id="docDate"
+          class="saleDate"
+          value="${today()}"
+          ${canChangeDate ? "" : "disabled"}
+        >
+
+      </div>
+
+      <div class="saleBarcodeRow">
+
+        <input
+          id="saleBarcode"
+          class="saleBarcode"
+          type="text"
+          inputmode="none"
+          maxlength="5"
+          placeholder="Штрихкод"
+          readonly
+        >
+
+        <button
+          class="productMicButton"
+          type="button"
+          disabled
+        >
+          🎤
+        </button>
+
+      </div>
+
+      <table class="saleTable">
+
+        <thead>
+          <tr>
+            <th>Код</th>
+            <th>Наименование</th>
+            <th>Цена</th>
+          </tr>
+        </thead>
+
+        <tbody id="saleItems"></tbody>
+
+      </table>
+
+      <div class="saleTotals">
+
+        <div>
+          Количество:
+          <span id="saleCount">0</span>
+          шт.
+        </div>
+
+        <div>
+          Сумма:
+          <span id="saleSum">0.00</span>
+        </div>
+
+      </div>
+
+      <button
+        id="saleButton"
+        class="saleButton"
+        type="button"
+        disabled
+      >
+        Продажа
+      </button>
+
+
+      <!-- PRICE EDITOR -->
+
+      <div
+        id="pricePanel"
+        class="pricePanel"
+      >
+
+        <div class="pricePanelTitle">
+          Изменить цену
+        </div>
+
+        <input
+          id="newPrice"
+          class="saleBarcode priceInput"
+          type="text"
+          inputmode="none"
+          readonly
+        >
+
+      </div>
+
+      ${dialogsHtml()}
+      ${keyboardHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // INIT
+  // ====================================================
+
+  initKeyboard();
+
+  const barcode =
+    document.getElementById("saleBarcode");
+
+  const itemsBody =
+    document.getElementById("saleItems");
+
+  const count =
+    document.getElementById("saleCount");
+
+  const sum =
+    document.getElementById("saleSum");
+
+  const backButton =
+    document.getElementById("saleBackButton");
+
+  const docDate =
+    document.getElementById("docDate");
+
+  const saleButton =
+    document.getElementById("saleButton");
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  const saleItems = [];
+
+  let lookupSequence = 0;
+  let barcodeError = false;
+  let selectedIndex = -1;
+  let saleSaving = false;
+
+
+  // ====================================================
+  // TOTALS
+  // ====================================================
+
+  function updateTotals() {
+    count.textContent =
+      String(saleItems.length);
+
+    sum.textContent = saleItems
+      .reduce(
+        (total, item) =>
+          total + Number(item.sell_price || 0),
+        0
+      )
+      .toFixed(2);
+
+    saleButton.disabled =
+      saleItems.length === 0 ||
+      saleSaving;
+  }
+
+
+  // ====================================================
+  // DRAW SALE TABLE
+  // ====================================================
+
+  function drawSaleTable() {
+    itemsBody.innerHTML = saleItems
+      .map(
+        (product, index) => `
+          <tr
+            data-index="${index}"
+            class="${selectedIndex === index ? "selected" : ""}"
+          >
+            <td>
+              ${escapeHtml(product.barcode)}
+            </td>
+
+            <td>
+              ${escapeHtml(product.name)}
+            </td>
+
+            <td>
+              ${Number(product.sell_price || 0).toFixed(2)}
+            </td>
+          </tr>
+        `
+      )
+      .join("");
+
+    updateTotals();
+  }
+
+
+  // ====================================================
+  // PRODUCT SELECTION
+  // ====================================================
+
+  function cancelSelection() {
+    selectedIndex = -1;
+    drawSaleTable();
+  }
+
+
+  function deleteSelected() {
+    if (selectedIndex < 0) {
+      return;
+    }
+
+    saleItems.splice(selectedIndex, 1);
+
+    cancelSelection();
+  }
+
+
+  // ====================================================
+  // LOCK SALE
+  // ====================================================
+
+  function setSaleLocked(locked) {
+    saleButton.disabled =
+      locked ||
+      saleItems.length === 0 ||
+      saleSaving;
+
+    backButton.disabled = locked;
+    barcode.disabled = locked;
+
+    docDate.disabled =
+      locked ||
+      !canChangeDate;
+  }
+
+
+  // ====================================================
+  // PRICE EDITOR
+  // ====================================================
+
+  function closePricePanel() {
+    document
+      .getElementById("pricePanel")
+      ?.classList.remove(
+        "show",
+        "keyboardOpen"
+      );
+
+    selectedIndex = -1;
+
+    drawSaleTable();
+    setSaleLocked(false);
+  }
+
+
+  function savePrice() {
+    if (selectedIndex < 0) {
+      return;
+    }
+
+    const input =
+      document.getElementById("newPrice");
+
+    const price =
+      Number(input.value);
+
+    if (
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      return;
+    }
+
+    saleItems[selectedIndex].sell_price =
+      price;
+
+    drawSaleTable();
+  }
+
+
+  function changePrice() {
+    if (selectedIndex < 0) {
+      return;
+    }
+
+    const input =
+      document.getElementById("newPrice");
+
+    const panel =
+      document.getElementById("pricePanel");
+
+    // Текущая цена
+    input.value =
+      saleItems[selectedIndex].sell_price;
+
+    // Показываем редактор
+    panel.classList.add(
+      "show",
+      "keyboardOpen"
+    );
+
+    setSaleLocked(true);
+
+    // -----------------------------------------------
+    // Выделяем текущую цену полностью
+    // -----------------------------------------------
+
+    input.focus();
+    input.select();
+
+    // -----------------------------------------------
+    // Открываем экранную клавиатуру
+    // -----------------------------------------------
+
+    showKeyboard(input, {
+      onEnter: savePrice,
+      onClose: closePricePanel,
+    });
+  }
+
+
+  // ====================================================
+  // SALE ITEM CLICK
+  // ====================================================
+
+  itemsBody.addEventListener(
+    "click",
+    (event) => {
+
+      if (
+        !hasPermission("sale.item.select") ||
+        saleSaving ||
+        document
+          .getElementById("keyboard")
+          ?.classList.contains("show")
+      ) {
+        return;
+      }
+
+      const row =
+        event.target.closest(
+          "tr[data-index]"
+        );
+
+      if (!row) {
+        return;
+      }
+
+      selectedIndex =
+        Number(row.dataset.index);
+
+      drawSaleTable();
+
+      setTimeout(() => {
+        showChoice(
+          "Выберите действие",
+          [
+            [
+              "Изменить цену",
+              changePrice,
+            ],
+
+            [
+              "Удалить товар",
+              () =>
+                showConfirm(
+                  "Удалить товар?",
+                  "Выбранный товар будет удалён",
+                  deleteSelected,
+                  cancelSelection
+                ),
+            ],
+
+            [
+              "Отмена",
+              cancelSelection,
+            ],
+          ]
+        );
+      }, 200);
+    }
+  );
+
+
+  // ====================================================
+  // BARCODE ERROR
+  // ====================================================
+
+  function resetBarcodeError() {
+    if (!barcodeError) {
+      return;
+    }
+
+    barcodeError = false;
+    barcode.value = "";
+
+    barcode.classList.remove(
+      "saleBarcodeNotFound"
+    );
+  }
+
+
+  // ====================================================
+  // PRODUCT LOOKUP
+  // ====================================================
+
+  async function lookupBarcode() {
+    const code =
+      barcode.value.trim();
+
+    if (code.length !== 5) {
+      return;
+    }
+
+    hideKeyboard();
+
+    const sequence =
+      ++lookupSequence;
+
+    const result =
+      await getProductByBarcode(code);
+
+    // Игнорируем устаревший запрос
+    if (sequence !== lookupSequence) {
+      return;
+    }
+
+    if (!result.success) {
+      barcodeError = true;
+
+      barcode.value =
+        "Код не найден";
+
+      barcode.classList.add(
+        "saleBarcodeNotFound"
+      );
+
+      return;
+    }
+
+    saleItems.push(result.data);
+
+    drawSaleTable();
+
+    barcode.value = "";
+
+    barcode.classList.remove(
+      "saleBarcodeNotFound"
+    );
+  }
+
+
+  // ====================================================
+  // BARCODE EVENTS
+  // ====================================================
+
+  barcode.addEventListener(
+    "input",
+    () => {
+
+      if (barcodeError) {
+        return;
+      }
+
+      if (barcode.value.length > 5) {
+        barcode.value =
+          barcode.value.slice(0, 5);
+      }
+
+      if (barcode.value.length === 5) {
+        lookupBarcode();
+      }
+    }
+  );
+
+
+  barcode.addEventListener(
+    "click",
+    () => {
+
+      if (saleSaving) {
+        return;
+      }
+
+      resetBarcodeError();
+
+      showKeyboard(barcode);
+    }
+  );
+
+
+  // ====================================================
+  // SAVE SALE
+  // ====================================================
+
+  async function saveSale() {
+    if (
+      saleSaving ||
+      saleItems.length === 0
+    ) {
+      return;
+    }
+
+    const now = new Date();
+
+    const saleDoc = {
+      sale_date: docDate.value,
+
+      sale_time:
+        now.toLocaleTimeString(
+          "ru-RU",
+          {
+            hour12: false,
+          }
+        ),
+
+      items: saleItems.map(
+        (item) => ({
+          barcode:
+            Number(item.barcode),
+
+          name:
+            item.name,
+
+          buy_price:
+            Number(
+              item.buy_price || 0
+            ),
+
+          sell_price:
+            Number(
+              item.sell_price || 0
+            ),
+        })
+      ),
+    };
+
+
+    // --------------------------------------------------
+    // LOCK UI
+    // --------------------------------------------------
+
+    saleSaving = true;
+
+    setSaleLocked(true);
+
+
+    // --------------------------------------------------
+    // SEND SALE
+    // --------------------------------------------------
+
+    let result;
+
+    try {
+      result =
+        await createSale(saleDoc);
+    } catch {
+      result = {
+        success: false,
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+    }
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    if (!result.success) {
+      saleSaving = false;
+
+      setSaleLocked(false);
+
+      showMessage(
+        "Ошибка продажи",
+        result.error?.message ||
+          "Ошибка сохранения продажи"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // SUCCESS
+    // --------------------------------------------------
+
+    const saleId =
+      result.data?.id;
+
+    saleItems.length = 0;
+
+    selectedIndex = -1;
+
+    barcode.value = "";
+    barcodeError = false;
+
+    barcode.classList.remove(
+      "saleBarcodeNotFound"
+    );
+
+    docDate.value =
+      today();
+
+    saleSaving = false;
+
+    drawSaleTable();
+    setSaleLocked(false);
+
+    showMessage(
+      "Продажа выполнена",
+      saleId
+        ? `Документ № ${saleId}`
+        : "Продажа сохранена",
+      showHome
+    );
+  }
+
+
+  // ====================================================
+  // EVENTS
+  // ====================================================
+
+  saleButton.addEventListener(
+    "click",
+    saveSale
+  );
+
+
+  backButton.addEventListener(
+    "click",
+    () => {
+      hideKeyboard();
+      showHome();
+    }
+  );
+
+
+  // ====================================================
+  // FIRST DRAW
+  // ====================================================
+
+  drawSaleTable();
+}
+</file>
+
+<file path="public/index.html">
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#4ea6ff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Котопанда">
+  <title>Котопанда POS</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="https://pos-admin.lateshoy.workers.dev/assets/icons/icon-192.png">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/js/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch(error => {
+          console.error("Service Worker:", error);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
+</file>
+
+<file path="wrangler.jsonc">
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pos-client",
+  "compatibility_date": "2026-08-15",
+  "assets": {
+    "directory": "./public"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
+</file>
+
+<file path="public/js/api.js">
+const API = "https://pos-api.lateshoy.workers.dev";
+
+
+// ======================================================
+// BASE REQUEST
+// ======================================================
+
+async function request(path, options = {}) {
+  const response = await fetch(`${API}${path}`, {
+    credentials: "include",
+    ...options,
+    headers: {
+      ...(options.body
+        ? { "Content-Type": "application/json" }
+        : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  let data = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (data && typeof data === "object") {
+    if (data.ok === true || data.success === true) {
+      return {
+        success: true,
+        data: data.user ?? data.data ?? data,
+      };
+    }
+
+    return {
+      success: false,
+      error: {
+        message:
+          typeof data.error === "string"
+            ? data.error
+            : data.error?.message ||
+              data.message ||
+              `Ошибка API (${response.status})`,
+      },
+    };
+  }
+
+  return {
+    success: false,
+    error: {
+      message: response.ok
+        ? "Пустой ответ API"
+        : `Ошибка API (${response.status})`,
+    },
+  };
+}
+
+
+// ======================================================
+// AUTH
+// ======================================================
+
+export function authLogin(username, password) {
+  return request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      username,
+      password,
+    }),
+  });
+}
+
+export function authMe() {
+  return request("/api/auth/me");
+}
+
+export function authLogout() {
+  return request("/api/auth/logout", {
+    method: "POST",
+  });
+}
+
+
+// ======================================================
+// PRODUCTS
+// ======================================================
+
+export function getProductByBarcode(barcode) {
+  return request(
+    `/api/products/${encodeURIComponent(barcode)}`
+  );
+}
+
+
+// ======================================================
+// SALES
+// ======================================================
+
+export function createSale(sale) {
+  return request("/api/sales", {
+    method: "POST",
+    body: JSON.stringify(sale),
+  });
+}
+
+
+// ======================================================
+// SALES JOURNAL
+// ======================================================
+
+export function getSalesJournal(from, to) {
+  return request(
+    `/api/sales/journal?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  );
+}
+
+
+// ======================================================
+// SALES REPORT
+// ======================================================
+
+export function getSalesReport(from, to) {
+  return request(
+    `/api/sales/report?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  );
+}
+
+// ======================================================
+// SALE DOCUMENT
+// ======================================================
+
+export function getSale(id) {
+  return request(
+    `/api/sales/${encodeURIComponent(id)}`
+  );
+}
+
+export function updateSale(id, items) {
+  return request(
+    `/api/sales/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        items,
+      }),
+    }
+  );
+}
+
+export function createProduct(product) {
+  return request("/api/products", {
+    method: "POST",
+    body: JSON.stringify(product),
+  });
+}
+
+export function getEvents(from, to) {
+  return request(
+    `/api/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  );
+}
+
+// ======================================================
+// CASH
+// ======================================================
+
+export function getCashDocuments(cashType) {
+  return request(
+    `/api/cash/${encodeURIComponent(cashType)}`
+  );
+}
+
+
+export function createCashDocument(
+  cashType,
+  date = null
+) {
+  return request(
+    `/api/cash/${encodeURIComponent(cashType)}`,
+    {
+      method: "POST",
+
+      ...(date
+        ? {
+            body: JSON.stringify({
+              date,
+            }),
+          }
+        : {}),
+    }
+  );
+}
+
+
+export function getCashDocument(
+  cashType,
+  documentId
+) {
+  return request(
+    `/api/cash/${encodeURIComponent(cashType)}/${encodeURIComponent(documentId)}`
+  );
+}
+
+// ======================================================
+// CASH OPERATIONS
+// ======================================================
+
+export function addCashOperation(
+  cashType,
+  documentId,
+  operation
+) {
+  return request(
+    `/api/cash/${encodeURIComponent(cashType)}/${encodeURIComponent(documentId)}/operations`,
+    {
+      method: "POST",
+
+      body: JSON.stringify({
+        sign: operation.sign,
+        operation_type: operation.operation_type,
+        amount: operation.amount,
+        comment: operation.comment || "",
+      }),
+    }
+  );
+}
+
+
+export function updateCashOperation(
+  cashType,
+  documentId,
+  operationId,
+  operation
+) {
+  return request(
+    `/api/cash/${encodeURIComponent(cashType)}/${encodeURIComponent(documentId)}/operations/${encodeURIComponent(operationId)}`,
+    {
+      method: "PUT",
+
+      body: JSON.stringify({
+        sign: operation.sign,
+        operation_type: operation.operation_type,
+        amount: operation.amount,
+        comment: operation.comment || "",
+      }),
+    }
+  );
+}
+
+
+export function deleteCashOperation(
+  cashType,
+  documentId,
+  operationId
+) {
+  return request(
+    `/api/cash/${encodeURIComponent(cashType)}/${encodeURIComponent(documentId)}/operations/${encodeURIComponent(operationId)}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+</file>
+
+<file path="public/js/app.js">
+import { authMe } from "./api.js";
+import { setCurrentUser } from "./state.js";
+import { initRouter, navigate } from "./router.js";
+
+const app = document.getElementById("app");
+initRouter(app);
+
+async function start(){
+  try{
+    const me = await authMe();
+    if(me.success){
+      setCurrentUser(me.data);
+      navigate("home");
+      return;
+    }
+  }catch{}
+  navigate("login");
+}
+
+start();
+</file>
+
+<file path="public/css/app.css">
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; font-family: "Segoe UI", Arial, sans-serif; color: #17212b; }
+body { min-height: 100vh; background: #36a9ef url("/assets/mobile_wallpaper_720x1280.webp") center top / cover no-repeat fixed; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: transparent; }.login-card { width: min(100%, 380px); padding: 30px; border: 1px solid rgba(255,255,255,.7); border-radius: 26px; background: rgba(255,255,255,.78); box-shadow: 0 18px 50px rgba(0,0,0,.22); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }.login-logo { font-size: 28px; font-weight: 900; color: #16b8b0; text-shadow: 0 1px 0 #fff; }.login-card h1 { margin: 8px 0 24px; font-size: 20px; }.login-form { display:grid; gap:16px }.login-form label{display:grid;gap:7px;font-weight:700}.login-form input{width:100%;padding:13px 14px;border:1px solid rgba(90,120,150,.45);border-radius:14px}.login-form button{padding:14px;border:1px solid rgba(255,255,255,.7);border-radius:16px;background:rgba(79,180,230,.85);font-weight:800}.error{min-height:20px;color:#a41414;font-weight:700}
+.home-page { min-height:100vh; padding:22px 24px 40px; background:transparent; }.hero-header { margin:0 auto 40px; text-align:center; color:#fff; }.title { font-size:32px; line-height:1.08; font-weight:900; color:#20d4c8; text-shadow:0 2px 8px rgba(0,0,0,.70),0 0 20px rgba(32,212,200,.35); }.current-user { margin-top:7px; font-size:20px; line-height:1.1; font-weight:800; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.72); }.menu { width:100%; margin:0 auto; display:flex; flex-direction:column; align-items:center; gap:18px; }.menu-item { width:100%; max-width:340px; height:72px; min-height:72px; padding:0 20px; display:flex; justify-content:center; align-items:center; border:1px solid rgba(255,255,255,.45); border-radius:22px; background:rgba(255,255,255,.28); box-shadow:0 8px 20px rgba(0,0,0,.18); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); text-align:center; font-size:20px; font-weight:700; color:#111; transition:transform .15s,background .15s; }.menu-item:hover { background:rgba(255,255,255,.36); }.menu-item:active { transform:scale(.98); }.menu-item.logout { color:#111; background:rgba(255,255,255,.28); }
+.sale-page{min-height:100vh;padding:20px;background:#fff}.back-button{width:100%;height:60px;margin-bottom:18px;border:1px solid #bbb;border-radius:10px;background:#fff;font-size:26px}.saleHeader{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}.saleTitle{margin:0;color:#009900;font-size:34px}.saleDate{width:175px;height:48px;padding:0 12px;border:1px solid #bdbdbd;border-radius:10px;background:transparent;font-size:22px;text-align:center}.saleBarcodeRow{display:flex;gap:10px}.saleBarcode{width:100%;height:60px;padding:0 18px;font-size:32px;border:1px solid #aaa;border-radius:12px;background:#fff}.saleBarcode.saleBarcodeNotFound{color:#d00000;border-color:#d00000;font-size:24px;font-weight:700}.productMicButton{width:64px;height:60px;border:1px solid #bdbdbd;border-radius:12px;background:#fff;font-size:26px}.saleTable{width:100%;margin-top:20px;border-collapse:collapse}.saleTable th{padding:10px;background:#009900;color:#fff;font-size:18px}.saleTable td{padding:10px;border-bottom:1px solid #ddd;font-size:18px}.saleTable tbody tr{cursor:pointer}.saleTable tbody tr.selected td{background:#dff4df}.saleTotals{display:flex;justify-content:space-between;margin:14px 0 18px;padding:14px 16px;background:#f3f3f3;border-radius:10px;font-size:20px;font-weight:600}.saleTotals span{color:#009900;font-weight:700}.saleButton{width:100%;height:56px;border:1px solid #bdbdbd;border-radius:8px;background:#fff;font-size:22px}.saleButton:disabled,.productMicButton:disabled,.productCreateButton:disabled{color:#aaa;background:#fafafa}.productForm{display:grid;gap:22px}.formGroup{display:grid;gap:8px}.formLabel{font-size:18px;font-weight:700}.productPrices{display:grid;grid-template-columns:1fr 1fr;gap:14px}.productInput{width:100%;height:58px;padding:0 16px;border:1px solid #aaa;border-radius:10px;font-size:22px}.journalFilter{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}.journalFilter .saleDate{width:100%}.documentShowButton{margin-bottom:0}
+.dialogOverlay{position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.42)}.dialogOverlay.show{display:flex}.dialogBox{width:min(100%,420px);padding:22px;border-radius:18px;background:#fff;box-shadow:0 18px 50px rgba(0,0,0,.28)}.dialogTitle{text-align:center;font-size:23px;font-weight:800;margin-bottom:16px}.dialogText{text-align:center;font-size:18px;margin:-4px 0 18px;color:#555}.dialogButtons{display:grid;gap:12px}.dialogButtonsRow{grid-template-columns:1fr 1fr}.dialogButton{width:100%;min-height:56px;padding:10px;border:1px solid #bbb;border-radius:12px;background:#fff;font-size:20px;font-weight:700}
+.pricePanel{position:fixed;left:50%;bottom:24px;z-index:1100;display:none;width:min(calc(100% - 32px),420px);padding:18px;transform:translateX(-50%);border:1px solid #bbb;border-radius:14px;background:#fff}.pricePanel.show{display:block}.pricePanel.keyboardOpen{bottom:340px}.pricePanelTitle{text-align:center;font-size:22px;font-weight:700;margin-bottom:14px}.pricePanel .priceInput{margin:0;width:100%;text-align:center;font-size:28px;font-weight:700}
+.loadingOverlay{position:fixed;inset:0;z-index:1150;display:none;align-items:center;justify-content:center;background:rgba(80,80,80,.42);pointer-events:all}.loadingOverlay.show{display:flex}.loadingSpinner{width:54px;height:54px;border:6px solid rgba(255,255,255,.55);border-top-color:#fff;border-radius:50%;animation:loadingSpin .75s linear infinite}@keyframes loadingSpin{to{transform:rotate(360deg)}}
+.keyboard{position:fixed;left:0;right:0;bottom:0;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:12px;background:#ececec;border-top:1px solid #bbb;z-index:999;transform:translateY(100%);transition:transform .25s}.keyboard.show{transform:translateY(0)}.keyboard .key{height:64px;border:1px solid #d0d0d0;border-radius:12px;background:#fff;font-size:28px;font-weight:700}.keyboard .keyDelete{background:#ffb74d}.keyboard .keyClear{background:#e53935;color:#fff}.keyboard .keyOk{background:#43a047;color:#fff}.keyboard .keyClose{background:#607d8b;color:#fff}
+@media(max-width:520px){body{background-attachment:scroll}.home-page{padding:20px 18px 30px}.hero-header{margin-bottom:34px}.title{font-size:28px}.current-user{font-size:18px}.menu{gap:18px}.menu-item{max-width:340px;height:68px;min-height:68px;border-radius:22px;font-size:18px}.sale-page{padding:14px 14px 320px}.document-page{padding-bottom:40px}.back-button{height:52px;font-size:22px}.saleTitle{font-size:28px}.saleDate{width:150px;height:44px;font-size:20px}.saleBarcode{height:56px;font-size:25px}.saleTable th{padding:8px 5px;font-size:15px}.saleTotals{font-size:16px}.productPrices{grid-template-columns:1fr}.keyboard .key{height:58px;font-size:25px}.pricePanel.keyboardOpen{bottom:320px}}
+@media(min-width:900px){.home-page{padding-top:24px}.menu-item{max-width:340px}.keyboard{left:50%;right:auto;width:600px;transform:translate(-50%,100%)}.keyboard.show{transform:translate(-50%,0)}}
+/* ======================================================
+   SALE TOTAL
+   ====================================================== */
+
+.saleTotals #saleSum {
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.saleTotals > div:last-child {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.reportTotals {
+  margin-top: 20px;
+  padding: 16px;
+  text-align: right;
+}
+
+
+
+.reportSalesTotal {
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.reportSalesTotal span {
+  color: #009900;
+}
+
+.reportBuyTotal {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 500;
+  color: #aaa;
+}
+
+/* ======================================================
+   CREATE PRODUCT
+   ====================================================== */
+
+.incomePage {
+  padding-bottom: 24px;
+}
+
+.incomeHeader {
+  margin-top: 24px;
+  margin-bottom: 30px;
+}
+
+.incomeNameBlock {
+  margin-bottom: 24px;
+}
+
+.incomeLabel {
+  display: block;
+  margin-bottom: 8px;
+
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.incomeNameRow {
+  display: flex;
+  gap: 8px;
+}
+
+.incomeNameInput {
+  flex: 1;
+  min-width: 0;
+
+  height: 60px;
+
+  padding: 0 16px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #bbb;
+  border-radius: 12px;
+
+  background: white;
+
+  font-size: 22px;
+}
+
+.incomeNameInput::placeholder {
+  color: #aaa;
+}
+
+.incomeMicButton {
+  width: 64px;
+  height: 60px;
+
+  flex: 0 0 64px;
+
+  border: 1px solid #bbb;
+  border-radius: 12px;
+
+  background: white;
+
+  font-size: 25px;
+}
+
+.incomePrices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+
+  margin-bottom: 30px;
+}
+
+.incomePriceBlock {
+  min-width: 0;
+}
+
+.incomePriceInput {
+  width: 100%;
+  height: 60px;
+
+  box-sizing: border-box;
+
+  padding: 0 16px;
+
+  border: 1px solid #bbb;
+  border-radius: 12px;
+
+  background: white;
+
+  text-align: right;
+
+  font-size: 24px;
+  font-weight: 600;
+
+  color: #999;
+}
+
+.incomePriceInput:focus {
+  color: #222;
+}
+
+.incomeCreateButton {
+  width: 100%;
+  min-height: 60px;
+
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.logTable th:first-child,
+.logTable td:first-child {
+  width: 34%;
+}
+
+.logTable th:last-child,
+.logTable td:last-child {
+  width: 66%;
+}
+
+.logInfo,
+.logEvent {
+  vertical-align: top;
+}
+
+.logDate {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.logTime {
+  margin-top: 2px;
+  font-size: 15px;
+}
+
+.logUsername {
+  margin-top: 7px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.logEventName {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.logEventDetails {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #777;
+}
+/* ======================================================
+   CASH JOURNAL
+   ====================================================== */
+
+.cashPage {
+  position: relative;
+
+  min-height: 100vh;
+
+  background: #fff;
+}
+
+
+/* ======================================================
+   CASH TABLE
+   ====================================================== */
+
+.cashTable {
+  width: 100%;
+
+  margin-top: 20px;
+
+  table-layout: fixed;
+}
+
+
+.cashTable th:nth-child(1),
+.cashTable td:nth-child(1) {
+  width: 34%;
+}
+
+
+.cashTable th:nth-child(2),
+.cashTable td:nth-child(2) {
+  width: 28%;
+}
+
+
+.cashTable th:nth-child(3),
+.cashTable td:nth-child(3) {
+  width: 38%;
+}
+
+
+.cashTable tbody tr {
+  cursor: pointer;
+}
+
+
+.cashTable td {
+  vertical-align: middle;
+}
+
+
+.cashTable td:last-child {
+  text-align: right;
+}
+
+
+/* ======================================================
+   EMPTY
+   ====================================================== */
+
+.cashEmpty {
+  padding: 35px 10px !important;
+
+  text-align: center !important;
+
+  color: #999;
+}
+
+
+/* ======================================================
+   ADD DOCUMENT
+   ====================================================== */
+
+.cashAddButton {
+  position: fixed;
+
+  right: 24px;
+  bottom: 24px;
+
+  z-index: 100;
+
+  width: 64px;
+  height: 64px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+
+  border: none;
+  border-radius: 50%;
+
+  background: #111;
+  color: #fff;
+
+  font-size: 38px;
+  font-weight: 300;
+  line-height: 1;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 4px 14px
+    rgba(0, 0, 0, 0.22);
+}
+
+
+.cashAddButton:active {
+  transform: scale(0.96);
+}
+
+
+/* ======================================================
+   CASH DOCUMENT
+   ====================================================== */
+
+.cashDocumentPage {
+  position: relative;
+
+  min-height: 100vh;
+
+  background: #fff;
+}
+
+
+.cashDocumentHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+
+  margin-bottom: 18px;
+
+  font-size: 18px;
+  font-weight: 600;
+}
+
+
+.cashBalanceBlock {
+  margin-bottom: 18px;
+
+  padding: 14px 16px;
+
+  border-radius: 10px;
+
+  background: #f3f3f3;
+}
+
+
+.cashBalanceBlock > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+
+  font-size: 18px;
+}
+
+
+.cashBalanceBlock strong {
+  color: #009900;
+}
+
+
+.cashOperationsTable {
+  margin-top: 0;
+}
+
+
+.cashOperationsTable th:first-child,
+.cashOperationsTable td:first-child {
+  width: 65%;
+}
+
+
+.cashOperationsTable th:last-child,
+.cashOperationsTable td:last-child {
+  width: 35%;
+
+  text-align: right;
+}
+
+
+.cashClosingBalance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  margin-top: 18px;
+
+  padding: 16px;
+
+  border-radius: 10px;
+
+  background: #f3f3f3;
+
+  font-size: 21px;
+  font-weight: 700;
+}
+
+
+.cashClosingBalance strong {
+  color: #009900;
+
+  font-size: 25px;
+}
+
+
+/* ======================================================
+   CASH MOBILE
+   ====================================================== */
+
+@media (max-width: 520px) {
+
+  .cashPage,
+  .cashDocumentPage {
+    min-height: 100vh;
+  }
+
+  .cashAddButton {
+    right: 18px;
+    bottom: 18px;
+
+    width: 60px;
+    height: 60px;
+
+    font-size: 35px;
+  }
+
+  .cashDocumentHeader {
+    font-size: 16px;
+  }
+
+  .cashBalanceBlock > div {
+    font-size: 16px;
+  }
+
+  .cashClosingBalance {
+    font-size: 18px;
+  }
+
+  .cashClosingBalance strong {
+    font-size: 22px;
+  }
+}
+
+/* ======================================================
+   CASH ACTIONS
+   ====================================================== */
+
+.cashActionButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+
+  margin-top: 20px;
+}
+
+.cashActionButtons[hidden] {
+  display: none;
+}
+
+.cashOperationButton {
+  height: 64px;
+
+  border: 1px solid #bbb;
+  border-radius: 12px;
+
+  background: #fff;
+
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.cashPlusButton {
+  color: #009900;
+}
+
+.cashMinusButton {
+  color: #c00000;
+}
+
+
+/* ======================================================
+   CASH OPERATION
+   ====================================================== */
+
+.cashOperationName {
+  font-weight: 600;
+}
+
+.cashOperationComment {
+  margin-top: 5px;
+
+  font-size: 14px;
+  color: #777;
+}
+
+.cashPositive {
+  color: #009900;
+  font-weight: 700;
+}
+
+.cashNegative {
+  color: #c00000;
+  font-weight: 700;
+}
+
+
+/* ======================================================
+   CASH MODAL
+   ====================================================== */
+
+.cashModal {
+  position: fixed;
+  inset: 0;
+
+  z-index: 1300;
+
+  display: none;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.cashModal.show {
+  display: flex;
+}
+
+.cashModalBox {
+  width: min(100%, 420px);
+
+  padding: 20px;
+
+  border-radius: 18px;
+
+  background: #fff;
+
+  box-shadow:
+    0 18px 50px
+    rgba(0, 0, 0, 0.28);
+}
+
+.cashModalTitle {
+  margin-bottom: 16px;
+
+  text-align: center;
+
+  font-size: 22px;
+  font-weight: 800;
+}
+
+
+/* ======================================================
+   TYPE BUTTONS
+   ====================================================== */
+
+.cashTypeButtons {
+  display: grid;
+  gap: 10px;
+}
+
+.cashTypeButton {
+  width: 100%;
+  min-height: 56px;
+
+  padding: 10px 14px;
+
+  border: 1px solid #bbb;
+  border-radius: 12px;
+
+  background: #fff;
+
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.cashDeleteButton {
+  color: #c00000;
+}
+
+
+/* ======================================================
+   AMOUNT
+   ====================================================== */
+
+.cashAmountInput,
+.cashCommentInput {
+  width: 100%;
+  height: 58px;
+
+  padding: 0 14px;
+
+  border: 1px solid #aaa;
+  border-radius: 10px;
+
+  background: #fff;
+
+  font-size: 24px;
+}
+
+.cashAmountInput {
+  text-align: right;
+  font-weight: 700;
+}
+
+.cashCommentBlock {
+  margin-top: 16px;
+}
+
+.cashCommentLabel {
+  margin-bottom: 7px;
+
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cashCommentInput {
+  font-size: 18px;
+}
+
+
+/* ======================================================
+   MODAL ACTIONS
+   ====================================================== */
+
+.cashModalActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+
+  margin-top: 18px;
+}
+
+.cashModalCancel,
+.cashModalOk {
+  width: 100%;
+  min-height: 54px;
+
+  padding: 8px;
+
+  border: 1px solid #bbb;
+  border-radius: 12px;
+
+  background: #fff;
+
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.cashModalCancel {
+  margin-top: 12px;
+}
+
+.cashModalActions .cashModalCancel {
+  margin-top: 0;
+}
+
+.cashModalOk {
+  color: #009900;
+}
+
+.cashDateLabel {
+  margin-bottom: 7px;
+
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cashDateInput {
+  width: 100%;
+  height: 56px;
+
+  box-sizing: border-box;
+
+  padding: 0 12px;
+
+  border: 1px solid #aaa;
+  border-radius: 10px;
+
+  background: #fff;
+
+  font-size: 20px;
+}
+</file>
+
+</files>

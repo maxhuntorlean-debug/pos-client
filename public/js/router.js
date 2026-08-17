@@ -5,45 +5,236 @@ import { showIncome } from "./pages/income.js";
 import { showJournal } from "./pages/journal.js";
 import { showReport } from "./pages/report.js";
 import { showLog } from "./pages/log.js";
+import { showSaleDocument } from "./pages/saleDocument.js";
+
+import { showCash } from "./pages/cash.js";
+import { showCashDocument } from "./pages/cashDocument.js";
+
 
 let app = null;
 
-export function initRouter(root){
+
+// ======================================================
+// INIT ROUTER
+// ======================================================
+
+export function initRouter(root) {
   app = root;
 }
 
-export function navigate(route){
-  if(!app) throw new Error("Router is not initialized");
 
-  switch(route){
+// ======================================================
+// NAVIGATE
+// ======================================================
+
+export function navigate(route, params = {}) {
+  if (!app) {
+    throw new Error("Router is not initialized");
+  }
+
+  switch (route) {
+
+    // --------------------------------------------------
+    // LOGIN
+    // --------------------------------------------------
+
     case "login":
-      showLogin(app, () => navigate("home"));
+      showLogin(
+        app,
+        () => navigate("home")
+      );
       break;
+
+
+    // --------------------------------------------------
+    // HOME
+    // --------------------------------------------------
+
     case "home":
       showHome(app, {
-        login: () => navigate("login"),
-        sale: () => navigate("sale"),
-        income: () => navigate("income"),
-        journal: () => navigate("journal"),
-        report: () => navigate("report"),
-        log: () => navigate("log")
+        login: () =>
+          navigate("login"),
+
+        sale: () =>
+          navigate("sale"),
+
+        income: () =>
+          navigate("income"),
+
+        journal: () =>
+          navigate("journal"),
+
+        report: () =>
+          navigate("report"),
+
+        log: () =>
+          navigate("log"),
+
+        cashKotopanda: () =>
+          navigate("cashKotopanda"),
+
+        cashElitka: () =>
+          navigate("cashElitka"),
       });
       break;
+
+
+    // --------------------------------------------------
+    // SALE
+    // --------------------------------------------------
+
     case "sale":
-      showSale(app, () => navigate("home"));
+      showSale(
+        app,
+        () => navigate("home")
+      );
       break;
+
+
+    // --------------------------------------------------
+    // INCOME
+    // --------------------------------------------------
+
     case "income":
-      showIncome(app, () => navigate("home"));
+      showIncome(
+        app,
+        () => navigate("home")
+      );
       break;
+
+
+    // --------------------------------------------------
+    // JOURNAL
+    // --------------------------------------------------
+
     case "journal":
-      showJournal(app, () => navigate("home"));
+      showJournal(
+        app,
+
+        // Назад
+        () => navigate("home"),
+
+        // Открыть документ
+        (saleId) =>
+          navigate(
+            "saleDocument",
+            { saleId }
+          )
+      );
       break;
+
+
+    // --------------------------------------------------
+    // SALE DOCUMENT
+    // --------------------------------------------------
+
+    case "saleDocument":
+      showSaleDocument(
+        app,
+        params.saleId,
+
+        // Назад возвращаемся в журнал
+        () => navigate("journal")
+      );
+      break;
+
+
+    // --------------------------------------------------
+    // REPORT
+    // --------------------------------------------------
+
     case "report":
-      showReport(app, () => navigate("home"));
+      showReport(
+        app,
+        () => navigate("home")
+      );
       break;
+
+
+    // --------------------------------------------------
+    // LOG
+    // --------------------------------------------------
+
     case "log":
-      showLog(app, () => navigate("home"));
+      showLog(
+        app,
+        () => navigate("home")
+      );
       break;
+
+
+    // --------------------------------------------------
+    // CASH KOTOPANDA
+    // --------------------------------------------------
+
+    case "cashKotopanda":
+  showCash(
+    app,
+    () => navigate("home"),
+
+    (documentId) =>
+      navigate(
+        "cashDocument",
+        {
+          cashType: "KOTOPANDA",
+          cashTitle: "Касса Котопанда",
+          documentId,
+        }
+      ),
+
+    "KOTOPANDA",
+    "Касса Котопанда"
+  );
+  break;
+
+
+    // --------------------------------------------------
+    // CASH ELITKA
+    // --------------------------------------------------
+
+    case "cashElitka":
+  showCash(
+    app,
+    () => navigate("home"),
+
+    (documentId) =>
+      navigate(
+        "cashDocument",
+        {
+          cashType: "ELITKA",
+          cashTitle: "Касса Элитка",
+          documentId,
+        }
+      ),
+
+    "ELITKA",
+    "Касса Элитка"
+  );
+  break;
+
+
+  case "cashDocument":
+  showCashDocument(
+    app,
+    params.cashType,
+    params.cashTitle,
+    params.documentId,
+
+    () => {
+      if (
+        params.cashType === "ELITKA"
+      ) {
+        navigate("cashElitka");
+      } else {
+        navigate("cashKotopanda");
+      }
+    }
+  );
+  break;
+    // --------------------------------------------------
+    // DEFAULT
+    // --------------------------------------------------
+
     default:
       navigate("home");
   }
