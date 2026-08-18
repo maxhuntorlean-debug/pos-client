@@ -79,921 +79,6 @@ wrangler.jsonc
 <files>
 This section contains the contents of the repository's files.
 
-<file path="public/js/pages/cashReport.js">
-import {
-  getCashReport,
-} from "../api.js";
-
-import {
-  dialogsHtml,
-  showMessage,
-} from "../components/dialogs.js";
-
-import {
-  escapeHtml,
-  formatDate,
-  today,
-} from "../state.js";
-
-
-// ======================================================
-// ELITKA OPERATION LABELS
-// ======================================================
-
-const OPERATION_LABELS = {
-  SALES: "Реализация",
-  TERMINAL: "Терминал",
-  WITHDRAWAL: "Съём",
-  SUGAR: "Расход сахар и пр.",
-  OTHER: "Расход прочие",
-  SALARY: "Зарплата",
-};
-
-
-// ======================================================
-// ELITKA OPERATION ORDER
-// ======================================================
-
-const OPERATION_ORDER = [
-  "SALES",
-  "TERMINAL",
-  "WITHDRAWAL",
-  "SUGAR",
-  "OTHER",
-  "SALARY",
-];
-
-
-// ======================================================
-// MONTH PERIOD
-// ======================================================
-
-function getCurrentMonthPeriod() {
-
-  // today() уже возвращает дату по Europe/Kyiv
-
-  const current =
-    today();
-
-  const [
-    year,
-    month,
-  ] =
-    current.split("-");
-
-
-  const firstDay =
-    `${year}-${month}-01`;
-
-
-  const lastDayNumber =
-    new Date(
-      Number(year),
-      Number(month),
-      0
-    ).getDate();
-
-
-  const lastDay =
-    `${year}-${month}-${String(
-      lastDayNumber
-    ).padStart(2, "0")}`;
-
-
-  return {
-    from: firstDay,
-    to: lastDay,
-  };
-}
-
-
-// ======================================================
-// MONEY
-// ======================================================
-
-function money(value) {
-
-  const number =
-    Number(value);
-
-
-  if (!Number.isFinite(number)) {
-    return "0.00";
-  }
-
-
-  return number.toLocaleString(
-    "ru-RU",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  );
-}
-
-
-// ======================================================
-// SIGNED MONEY
-// ======================================================
-
-function signedMoney(value) {
-
-  const number =
-    Number(value);
-
-
-  if (!Number.isFinite(number)) {
-    return "0.00";
-  }
-
-
-  if (number > 0) {
-
-    return `+${money(number)}`;
-
-  }
-
-
-  if (number < 0) {
-
-    return `−${money(
-      Math.abs(number)
-    )}`;
-
-  }
-
-
-  return money(0);
-}
-
-
-// ======================================================
-// PAGE
-// ======================================================
-
-export function showCashReport(
-  app,
-  showHome
-) {
-
-  const period =
-    getCurrentMonthPeriod();
-
-
-  // ====================================================
-  // PAGE
-  // ====================================================
-
-  app.innerHTML = `
-    <main
-      class="sale-page document-page cashReportPage"
-    >
-
-      <button
-        id="cashReportBack"
-        class="back-button"
-        type="button"
-      >
-        ← Назад
-      </button>
-
-
-      <div class="saleHeader">
-
-        <h2 class="saleTitle">
-          Отчёт Элитка
-        </h2>
-
-      </div>
-
-
-      <!-- =============================================
-           PERIOD
-           ============================================= -->
-
-      <div class="cashReportPeriod">
-
-        <label class="cashReportDateField">
-
-          <span>
-            С
-          </span>
-
-          <input
-            id="cashReportFrom"
-            class="saleDate"
-            type="date"
-            value="${period.from}"
-          >
-
-        </label>
-
-
-        <label class="cashReportDateField">
-
-          <span>
-            По
-          </span>
-
-          <input
-            id="cashReportTo"
-            class="saleDate"
-            type="date"
-            value="${period.to}"
-          >
-
-        </label>
-
-      </div>
-
-
-      <button
-        id="cashReportShow"
-        class="saleButton documentShowButton"
-        type="button"
-      >
-        Показать
-      </button>
-
-
-      <!-- =============================================
-           REPORT
-           ============================================= -->
-
-      <div
-        id="cashReportContent"
-        class="cashReportContent"
-      ></div>
-
-
-      <!-- =============================================
-           LOADING
-           ============================================= -->
-
-      <div
-        id="cashReportLoading"
-        class="loadingOverlay"
-        aria-hidden="true"
-      >
-        <div class="loadingSpinner"></div>
-      </div>
-
-
-      ${dialogsHtml()}
-
-    </main>
-  `;
-
-
-  // ====================================================
-  // ELEMENTS
-  // ====================================================
-
-  const back =
-    document.getElementById(
-      "cashReportBack"
-    );
-
-
-  const from =
-    document.getElementById(
-      "cashReportFrom"
-    );
-
-
-  const to =
-    document.getElementById(
-      "cashReportTo"
-    );
-
-
-  const showButton =
-    document.getElementById(
-      "cashReportShow"
-    );
-
-
-  const content =
-    document.getElementById(
-      "cashReportContent"
-    );
-
-
-  const loading =
-    document.getElementById(
-      "cashReportLoading"
-    );
-
-
-  // ====================================================
-  // STATE
-  // ====================================================
-
-  let busy =
-    false;
-
-
-  // ====================================================
-  // BUSY
-  // ====================================================
-
-  function setBusy(value) {
-
-    busy =
-      value;
-
-
-    loading.classList.toggle(
-      "show",
-      value
-    );
-
-
-    loading.setAttribute(
-      "aria-hidden",
-      value
-        ? "false"
-        : "true"
-    );
-
-
-    showButton.disabled =
-      value;
-
-
-    from.disabled =
-      value;
-
-
-    to.disabled =
-      value;
-
-
-    back.disabled =
-      value;
-  }
-
-
-  // ====================================================
-  // NORMALIZE GROUPS
-  // ====================================================
-
-  function normalizeGroups(groups) {
-
-    const source =
-      Array.isArray(groups)
-        ? groups
-        : [];
-
-
-    const map =
-      new Map();
-
-
-    for (const group of source) {
-
-      map.set(
-        String(
-          group.operation_type ||
-          ""
-        ),
-        group
-      );
-
-    }
-
-
-    // Показываем все известные группы,
-    // даже если за период сумма равна нулю.
-
-    const result =
-      OPERATION_ORDER.map(
-        (operationType) => {
-
-          const group =
-            map.get(
-              operationType
-            );
-
-
-          return {
-            operation_type:
-              operationType,
-
-            total:
-              Number(
-                group?.total || 0
-              ),
-
-            operations:
-              Array.isArray(
-                group?.operations
-              )
-                ? group.operations
-                : [],
-          };
-
-        }
-      );
-
-
-    // Если когда-нибудь сервер отдаст
-    // новый неизвестный тип операции,
-    // мы его тоже не потеряем.
-
-    for (const group of source) {
-
-      const operationType =
-        String(
-          group.operation_type ||
-          ""
-        );
-
-
-      if (
-        !OPERATION_ORDER.includes(
-          operationType
-        )
-      ) {
-
-        result.push({
-          operation_type:
-            operationType,
-
-          total:
-            Number(
-              group.total || 0
-            ),
-
-          operations:
-            Array.isArray(
-              group.operations
-            )
-              ? group.operations
-              : [],
-        });
-
-      }
-
-    }
-
-
-    return result;
-  }
-
-
-  // ====================================================
-  // DRAW OPERATION
-  // ====================================================
-
-  function operationHtml(
-    operation
-  ) {
-
-    const amount =
-      Number(
-        operation.amount || 0
-      );
-
-
-    const comment =
-      String(
-        operation.comment ||
-        ""
-      ).trim();
-
-
-    return `
-      <div class="cashReportOperation">
-
-        <div class="cashReportOperationMain">
-
-          <span class="cashReportOperationDate">
-            ${escapeHtml(
-              formatDate(
-                operation.date
-              )
-            )}
-          </span>
-
-
-          <strong
-            class="${
-              amount < 0
-                ? "cashNegative"
-                : "cashPositive"
-            }"
-          >
-            ${escapeHtml(
-              signedMoney(
-                amount
-              )
-            )}
-          </strong>
-
-        </div>
-
-
-        ${
-          comment
-
-            ? `
-              <div class="cashReportOperationComment">
-                ${escapeHtml(
-                  comment
-                )}
-              </div>
-            `
-
-            : ""
-        }
-
-      </div>
-    `;
-  }
-
-
-  // ====================================================
-  // DRAW GROUP
-  // ====================================================
-
-  function groupHtml(group) {
-
-    const operationType =
-      String(
-        group.operation_type ||
-        ""
-      );
-
-
-    const label =
-      OPERATION_LABELS[
-        operationType
-      ] ||
-      operationType ||
-      "Операция";
-
-
-    const total =
-      Number(
-        group.total || 0
-      );
-
-
-    const operations =
-      Array.isArray(
-        group.operations
-      )
-        ? group.operations
-        : [];
-
-
-    return `
-      <div
-        class="cashReportGroup"
-        data-report-group="${escapeHtml(
-          operationType
-        )}"
-      >
-
-        <button
-          class="cashReportGroupHeader"
-          type="button"
-        >
-
-          <span class="cashReportGroupLeft">
-
-            <span class="cashReportArrow">
-              ▶
-            </span>
-
-            <span>
-              ${escapeHtml(label)}
-            </span>
-
-          </span>
-
-
-          <strong
-            class="${
-              total < 0
-                ? "cashNegative"
-                : total > 0
-                  ? "cashPositive"
-                  : ""
-            }"
-          >
-            ${escapeHtml(
-              signedMoney(
-                total
-              )
-            )}
-          </strong>
-
-        </button>
-
-
-        <div
-          class="cashReportGroupDetails"
-          hidden
-        >
-
-          ${
-            operations.length
-
-              ? operations
-                  .map(
-                    operationHtml
-                  )
-                  .join("")
-
-              : `
-                <div class="cashReportEmpty">
-                  Нет операций
-                </div>
-              `
-          }
-
-        </div>
-
-      </div>
-    `;
-  }
-
-
-  // ====================================================
-  // DRAW REPORT
-  // ====================================================
-
-  function drawReport(data) {
-
-    const openingBalance =
-      Number(
-        data?.opening_balance || 0
-      );
-
-
-    const closingBalance =
-      Number(
-        data?.closing_balance || 0
-      );
-
-
-    const groups =
-      normalizeGroups(
-        data?.groups
-      );
-
-
-    content.innerHTML = `
-
-      <!-- =============================================
-           OPENING BALANCE
-           ============================================= -->
-
-      <div class="cashReportBalance cashReportOpening">
-
-        <span>
-          Остаток на начало
-        </span>
-
-        <strong>
-          ${escapeHtml(
-            money(
-              openingBalance
-            )
-          )}
-        </strong>
-
-      </div>
-
-
-      <!-- =============================================
-           GROUPS
-           ============================================= -->
-
-      <div class="cashReportGroups">
-
-        ${groups
-          .map(
-            groupHtml
-          )
-          .join("")}
-
-      </div>
-
-
-      <!-- =============================================
-           CLOSING BALANCE
-           ============================================= -->
-
-      <div class="cashReportBalance cashReportClosing">
-
-        <span>
-          Остаток на конец
-        </span>
-
-        <strong>
-          ${escapeHtml(
-            money(
-              closingBalance
-            )
-          )}
-        </strong>
-
-      </div>
-
-    `;
-
-
-    // ==================================================
-    // ACCORDION
-    // ==================================================
-
-    content
-      .querySelectorAll(
-        ".cashReportGroup"
-      )
-      .forEach(
-        (group) => {
-
-          const header =
-            group.querySelector(
-              ".cashReportGroupHeader"
-            );
-
-
-          const details =
-            group.querySelector(
-              ".cashReportGroupDetails"
-            );
-
-
-          const arrow =
-            group.querySelector(
-              ".cashReportArrow"
-            );
-
-
-          header.addEventListener(
-            "click",
-            () => {
-
-              const open =
-                !details.hidden;
-
-
-              details.hidden =
-                open;
-
-
-              arrow.textContent =
-                open
-                  ? "▶"
-                  : "▼";
-
-            }
-          );
-
-        }
-      );
-  }
-
-
-  // ====================================================
-  // LOAD REPORT
-  // ====================================================
-
-  async function loadReport() {
-
-    if (busy) {
-      return;
-    }
-
-
-    // --------------------------------------------------
-    // VALIDATION
-    // --------------------------------------------------
-
-    if (
-      !from.value ||
-      !to.value
-    ) {
-
-      showMessage(
-        "Отчёт Элитка",
-        "Выберите период"
-      );
-
-      return;
-    }
-
-
-    if (
-      from.value >
-      to.value
-    ) {
-
-      showMessage(
-        "Отчёт Элитка",
-        "Некорректный период"
-      );
-
-      return;
-    }
-
-
-    // --------------------------------------------------
-    // LOADING
-    // --------------------------------------------------
-
-    setBusy(true);
-
-
-    let result;
-
-
-    try {
-
-      result =
-        await getCashReport(
-          "ELITKA",
-          from.value,
-          to.value
-        );
-
-    } catch {
-
-      result = {
-        success: false,
-
-        error: {
-          message:
-            "Нет связи с сервером",
-        },
-      };
-
-    }
-
-
-    setBusy(false);
-
-
-    // --------------------------------------------------
-    // ERROR
-    // --------------------------------------------------
-
-    if (!result.success) {
-
-      showMessage(
-        "Ошибка отчёта",
-        result.error?.message ||
-          "Не удалось загрузить отчёт Элитки"
-      );
-
-      return;
-    }
-
-
-    // --------------------------------------------------
-    // DRAW
-    // --------------------------------------------------
-
-    drawReport(
-      result.data || {}
-    );
-  }
-
-
-  // ====================================================
-  // EVENTS
-  // ====================================================
-
-  back.addEventListener(
-    "click",
-    showHome
-  );
-
-
-  showButton.addEventListener(
-    "click",
-    loadReport
-  );
-
-
-  // При смене периода пока автоматически
-  // запрос не отправляем.
-  // Пользователь нажимает "Показать".
-
-
-  // ====================================================
-  // FIRST LOAD
-  // ====================================================
-
-  loadReport();
-}
-</file>
-
 <file path=".wrangler/cache/wrangler-account.json">
 {
   "account": {
@@ -3818,6 +2903,921 @@ export function showCashDocument(
 }
 </file>
 
+<file path="public/js/pages/cashReport.js">
+import {
+  getCashReport,
+} from "../api.js";
+
+import {
+  dialogsHtml,
+  showMessage,
+} from "../components/dialogs.js";
+
+import {
+  escapeHtml,
+  formatDate,
+  today,
+} from "../state.js";
+
+
+// ======================================================
+// ELITKA OPERATION LABELS
+// ======================================================
+
+const OPERATION_LABELS = {
+  SALES: "Реализация",
+  TERMINAL: "Терминал",
+  WITHDRAWAL: "Съём",
+  SUGAR: "Расход сахар и пр.",
+  OTHER: "Расход прочие",
+  SALARY: "Зарплата",
+};
+
+
+// ======================================================
+// ELITKA OPERATION ORDER
+// ======================================================
+
+const OPERATION_ORDER = [
+  "SALES",
+  "TERMINAL",
+  "WITHDRAWAL",
+  "SUGAR",
+  "OTHER",
+  "SALARY",
+];
+
+
+// ======================================================
+// MONTH PERIOD
+// ======================================================
+
+function getCurrentMonthPeriod() {
+
+  // today() уже возвращает дату по Europe/Kyiv
+
+  const current =
+    today();
+
+  const [
+    year,
+    month,
+  ] =
+    current.split("-");
+
+
+  const firstDay =
+    `${year}-${month}-01`;
+
+
+  const lastDayNumber =
+    new Date(
+      Number(year),
+      Number(month),
+      0
+    ).getDate();
+
+
+  const lastDay =
+    `${year}-${month}-${String(
+      lastDayNumber
+    ).padStart(2, "0")}`;
+
+
+  return {
+    from: firstDay,
+    to: lastDay,
+  };
+}
+
+
+// ======================================================
+// MONEY
+// ======================================================
+
+function money(value) {
+
+  const number =
+    Number(value);
+
+
+  if (!Number.isFinite(number)) {
+    return "0.00";
+  }
+
+
+  return number.toLocaleString(
+    "ru-RU",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
+}
+
+
+// ======================================================
+// SIGNED MONEY
+// ======================================================
+
+function signedMoney(value) {
+
+  const number =
+    Number(value);
+
+
+  if (!Number.isFinite(number)) {
+    return "0.00";
+  }
+
+
+  if (number > 0) {
+
+    return `+${money(number)}`;
+
+  }
+
+
+  if (number < 0) {
+
+    return `−${money(
+      Math.abs(number)
+    )}`;
+
+  }
+
+
+  return money(0);
+}
+
+
+// ======================================================
+// PAGE
+// ======================================================
+
+export function showCashReport(
+  app,
+  showHome
+) {
+
+  const period =
+    getCurrentMonthPeriod();
+
+
+  // ====================================================
+  // PAGE
+  // ====================================================
+
+  app.innerHTML = `
+    <main
+      class="sale-page document-page cashReportPage"
+    >
+
+      <button
+        id="cashReportBack"
+        class="back-button"
+        type="button"
+      >
+        ← Назад
+      </button>
+
+
+      <div class="saleHeader">
+
+        <h2 class="saleTitle">
+          Отчёт Элитка
+        </h2>
+
+      </div>
+
+
+      <!-- =============================================
+           PERIOD
+           ============================================= -->
+
+      <div class="cashReportPeriod">
+
+        <label class="cashReportDateField">
+
+          <span>
+            С
+          </span>
+
+          <input
+            id="cashReportFrom"
+            class="saleDate"
+            type="date"
+            value="${period.from}"
+          >
+
+        </label>
+
+
+        <label class="cashReportDateField">
+
+          <span>
+            По
+          </span>
+
+          <input
+            id="cashReportTo"
+            class="saleDate"
+            type="date"
+            value="${period.to}"
+          >
+
+        </label>
+
+      </div>
+
+
+      <button
+        id="cashReportShow"
+        class="saleButton documentShowButton"
+        type="button"
+      >
+        Показать
+      </button>
+
+
+      <!-- =============================================
+           REPORT
+           ============================================= -->
+
+      <div
+        id="cashReportContent"
+        class="cashReportContent"
+      ></div>
+
+
+      <!-- =============================================
+           LOADING
+           ============================================= -->
+
+      <div
+        id="cashReportLoading"
+        class="loadingOverlay"
+        aria-hidden="true"
+      >
+        <div class="loadingSpinner"></div>
+      </div>
+
+
+      ${dialogsHtml()}
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // ELEMENTS
+  // ====================================================
+
+  const back =
+    document.getElementById(
+      "cashReportBack"
+    );
+
+
+  const from =
+    document.getElementById(
+      "cashReportFrom"
+    );
+
+
+  const to =
+    document.getElementById(
+      "cashReportTo"
+    );
+
+
+  const showButton =
+    document.getElementById(
+      "cashReportShow"
+    );
+
+
+  const content =
+    document.getElementById(
+      "cashReportContent"
+    );
+
+
+  const loading =
+    document.getElementById(
+      "cashReportLoading"
+    );
+
+
+  // ====================================================
+  // STATE
+  // ====================================================
+
+  let busy =
+    false;
+
+
+  // ====================================================
+  // BUSY
+  // ====================================================
+
+  function setBusy(value) {
+
+    busy =
+      value;
+
+
+    loading.classList.toggle(
+      "show",
+      value
+    );
+
+
+    loading.setAttribute(
+      "aria-hidden",
+      value
+        ? "false"
+        : "true"
+    );
+
+
+    showButton.disabled =
+      value;
+
+
+    from.disabled =
+      value;
+
+
+    to.disabled =
+      value;
+
+
+    back.disabled =
+      value;
+  }
+
+
+  // ====================================================
+  // NORMALIZE GROUPS
+  // ====================================================
+
+  function normalizeGroups(groups) {
+
+    const source =
+      Array.isArray(groups)
+        ? groups
+        : [];
+
+
+    const map =
+      new Map();
+
+
+    for (const group of source) {
+
+      map.set(
+        String(
+          group.operation_type ||
+          ""
+        ),
+        group
+      );
+
+    }
+
+
+    // Показываем все известные группы,
+    // даже если за период сумма равна нулю.
+
+    const result =
+      OPERATION_ORDER.map(
+        (operationType) => {
+
+          const group =
+            map.get(
+              operationType
+            );
+
+
+          return {
+            operation_type:
+              operationType,
+
+            total:
+              Number(
+                group?.total || 0
+              ),
+
+            operations:
+              Array.isArray(
+                group?.operations
+              )
+                ? group.operations
+                : [],
+          };
+
+        }
+      );
+
+
+    // Если когда-нибудь сервер отдаст
+    // новый неизвестный тип операции,
+    // мы его тоже не потеряем.
+
+    for (const group of source) {
+
+      const operationType =
+        String(
+          group.operation_type ||
+          ""
+        );
+
+
+      if (
+        !OPERATION_ORDER.includes(
+          operationType
+        )
+      ) {
+
+        result.push({
+          operation_type:
+            operationType,
+
+          total:
+            Number(
+              group.total || 0
+            ),
+
+          operations:
+            Array.isArray(
+              group.operations
+            )
+              ? group.operations
+              : [],
+        });
+
+      }
+
+    }
+
+
+    return result;
+  }
+
+
+  // ====================================================
+  // DRAW OPERATION
+  // ====================================================
+
+  function operationHtml(
+    operation
+  ) {
+
+    const amount =
+      Number(
+        operation.amount || 0
+      );
+
+
+    const comment =
+      String(
+        operation.comment ||
+        ""
+      ).trim();
+
+
+    return `
+      <div class="cashReportOperation">
+
+        <div class="cashReportOperationMain">
+
+          <span class="cashReportOperationDate">
+            ${escapeHtml(
+              formatDate(
+                operation.date
+              )
+            )}
+          </span>
+
+
+          <strong
+            class="${
+              amount < 0
+                ? "cashNegative"
+                : "cashPositive"
+            }"
+          >
+            ${escapeHtml(
+              signedMoney(
+                amount
+              )
+            )}
+          </strong>
+
+        </div>
+
+
+        ${
+          comment
+
+            ? `
+              <div class="cashReportOperationComment">
+                ${escapeHtml(
+                  comment
+                )}
+              </div>
+            `
+
+            : ""
+        }
+
+      </div>
+    `;
+  }
+
+
+  // ====================================================
+  // DRAW GROUP
+  // ====================================================
+
+  function groupHtml(group) {
+
+    const operationType =
+      String(
+        group.operation_type ||
+        ""
+      );
+
+
+    const label =
+      OPERATION_LABELS[
+        operationType
+      ] ||
+      operationType ||
+      "Операция";
+
+
+    const total =
+      Number(
+        group.total || 0
+      );
+
+
+    const operations =
+      Array.isArray(
+        group.operations
+      )
+        ? group.operations
+        : [];
+
+
+    return `
+      <div
+        class="cashReportGroup"
+        data-report-group="${escapeHtml(
+          operationType
+        )}"
+      >
+
+        <button
+          class="cashReportGroupHeader"
+          type="button"
+        >
+
+          <span class="cashReportGroupLeft">
+
+            <span class="cashReportArrow">
+              ▶
+            </span>
+
+            <span>
+              ${escapeHtml(label)}
+            </span>
+
+          </span>
+
+
+          <strong
+            class="${
+              total < 0
+                ? "cashNegative"
+                : total > 0
+                  ? "cashPositive"
+                  : ""
+            }"
+          >
+            ${escapeHtml(
+              signedMoney(
+                total
+              )
+            )}
+          </strong>
+
+        </button>
+
+
+        <div
+          class="cashReportGroupDetails"
+          hidden
+        >
+
+          ${
+            operations.length
+
+              ? operations
+                  .map(
+                    operationHtml
+                  )
+                  .join("")
+
+              : `
+                <div class="cashReportEmpty">
+                  Нет операций
+                </div>
+              `
+          }
+
+        </div>
+
+      </div>
+    `;
+  }
+
+
+  // ====================================================
+  // DRAW REPORT
+  // ====================================================
+
+  function drawReport(data) {
+
+    const openingBalance =
+      Number(
+        data?.opening_balance || 0
+      );
+
+
+    const closingBalance =
+      Number(
+        data?.closing_balance || 0
+      );
+
+
+    const groups =
+      normalizeGroups(
+        data?.groups
+      );
+
+
+    content.innerHTML = `
+
+      <!-- =============================================
+           OPENING BALANCE
+           ============================================= -->
+
+      <div class="cashReportBalance cashReportOpening">
+
+        <span>
+          Остаток на начало
+        </span>
+
+        <strong>
+          ${escapeHtml(
+            money(
+              openingBalance
+            )
+          )}
+        </strong>
+
+      </div>
+
+
+      <!-- =============================================
+           GROUPS
+           ============================================= -->
+
+      <div class="cashReportGroups">
+
+        ${groups
+          .map(
+            groupHtml
+          )
+          .join("")}
+
+      </div>
+
+
+      <!-- =============================================
+           CLOSING BALANCE
+           ============================================= -->
+
+      <div class="cashReportBalance cashReportClosing">
+
+        <span>
+          Остаток на конец
+        </span>
+
+        <strong>
+          ${escapeHtml(
+            money(
+              closingBalance
+            )
+          )}
+        </strong>
+
+      </div>
+
+    `;
+
+
+    // ==================================================
+    // ACCORDION
+    // ==================================================
+
+    content
+      .querySelectorAll(
+        ".cashReportGroup"
+      )
+      .forEach(
+        (group) => {
+
+          const header =
+            group.querySelector(
+              ".cashReportGroupHeader"
+            );
+
+
+          const details =
+            group.querySelector(
+              ".cashReportGroupDetails"
+            );
+
+
+          const arrow =
+            group.querySelector(
+              ".cashReportArrow"
+            );
+
+
+          header.addEventListener(
+            "click",
+            () => {
+
+              const open =
+                !details.hidden;
+
+
+              details.hidden =
+                open;
+
+
+              arrow.textContent =
+                open
+                  ? "▶"
+                  : "▼";
+
+            }
+          );
+
+        }
+      );
+  }
+
+
+  // ====================================================
+  // LOAD REPORT
+  // ====================================================
+
+  async function loadReport() {
+
+    if (busy) {
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // VALIDATION
+    // --------------------------------------------------
+
+    if (
+      !from.value ||
+      !to.value
+    ) {
+
+      showMessage(
+        "Отчёт Элитка",
+        "Выберите период"
+      );
+
+      return;
+    }
+
+
+    if (
+      from.value >
+      to.value
+    ) {
+
+      showMessage(
+        "Отчёт Элитка",
+        "Некорректный период"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // LOADING
+    // --------------------------------------------------
+
+    setBusy(true);
+
+
+    let result;
+
+
+    try {
+
+      result =
+        await getCashReport(
+          "ELITKA",
+          from.value,
+          to.value
+        );
+
+    } catch {
+
+      result = {
+        success: false,
+
+        error: {
+          message:
+            "Нет связи с сервером",
+        },
+      };
+
+    }
+
+
+    setBusy(false);
+
+
+    // --------------------------------------------------
+    // ERROR
+    // --------------------------------------------------
+
+    if (!result.success) {
+
+      showMessage(
+        "Ошибка отчёта",
+        result.error?.message ||
+          "Не удалось загрузить отчёт Элитки"
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------
+    // DRAW
+    // --------------------------------------------------
+
+    drawReport(
+      result.data || {}
+    );
+  }
+
+
+  // ====================================================
+  // EVENTS
+  // ====================================================
+
+  back.addEventListener(
+    "click",
+    showHome
+  );
+
+
+  showButton.addEventListener(
+    "click",
+    loadReport
+  );
+
+
+  // При смене периода пока автоматически
+  // запрос не отправляем.
+  // Пользователь нажимает "Показать".
+
+
+  // ====================================================
+  // FIRST LOAD
+  // ====================================================
+
+  loadReport();
+}
+</file>
+
 <file path="public/js/pages/login.js">
 import { authLogin, authMe } from "../api.js";
 import { setCurrentUser } from "../state.js";
@@ -5298,304 +5298,6 @@ export function initKeyboard() {
 }
 </file>
 
-<file path="public/js/pages/home.js">
-import {
-  authLogout,
-} from "../api.js";
-
-import {
-  currentUser,
-  setCurrentUser,
-  hasPermission,
-  escapeHtml,
-} from "../state.js";
-
-
-// ======================================================
-// MENU ITEM
-// ======================================================
-
-function menuItem(
-  permission,
-  label,
-  action = ""
-) {
-
-  if (!hasPermission(permission)) {
-    return "";
-  }
-
-  return `
-    <button
-      class="menu-item"
-      type="button"
-      ${
-        action
-          ? `data-action="${action}"`
-          : ""
-      }
-    >
-      ${label}
-    </button>
-  `;
-}
-
-
-// ======================================================
-// CASH VIEW PERMISSIONS
-// ======================================================
-
-function canViewElitka() {
-
-  return (
-    hasPermission("cash.elitka") ||
-    hasPermission("cash.elitka.today") ||
-    hasPermission("cash.elitka.edit")
-  );
-}
-
-
-function canViewKotopanda() {
-
-  return (
-    hasPermission("cash.kotopanda") ||
-    hasPermission("cash.kotopanda.today") ||
-    hasPermission("cash.kotopanda.edit")
-  );
-}
-
-
-// ======================================================
-// CASH MENU ITEM
-// ======================================================
-
-function cashMenuItem(
-  visible,
-  label,
-  action
-) {
-
-  if (!visible) {
-    return "";
-  }
-
-  return `
-    <button
-      class="menu-item"
-      type="button"
-      data-action="${action}"
-    >
-      ${label}
-    </button>
-  `;
-}
-
-
-// ======================================================
-// HOME
-// ======================================================
-
-export function showHome(
-  app,
-  routes
-) {
-
-  app.innerHTML = `
-    <main class="home-page">
-
-      <header class="hero-header">
-
-        <div class="title">
-          Котопанда v2+
-        </div>
-
-        <div class="current-user">
-          ${escapeHtml(
-            currentUser?.name ||
-            "Пользователь"
-          )}
-        </div>
-
-      </header>
-
-
-      <section class="menu">
-
-        ${menuItem(
-          "sale.create",
-          "💰 Реализация",
-          "sale"
-        )}
-
-        ${menuItem(
-          "product.create",
-          "📦 Приход",
-          "income"
-        )}
-
-        ${menuItem(
-          "journal.read",
-          "📋 Журнал реализации",
-          "journal"
-        )}
-
-        ${menuItem(
-          "report.read",
-          "∑ Отчёт продаж",
-          "report"
-        )}
-
-        ${menuItem(
-          "event.read",
-          "🕘 Журнал событий",
-          "log"
-        )}
-
-
-        ${cashMenuItem(
-          canViewKotopanda(),
-          "🧸 Касса Котопанда",
-          "cashKotopanda"
-        )}
-
-        ${cashMenuItem(
-          canViewElitka(),
-          "☕ Касса Элитка",
-          "cashElitka"
-        )}
-
-        ${menuItem(
-          "cash.elitka.report",
-          "∑ Отчёт Элитка",
-           "cashElitkaReport"
-        )}
-
-        <button
-          id="logoutButton"
-          class="menu-item logout"
-          type="button"
-        >
-          🚪 Выйти
-        </button>
-
-      </section>
-
-    </main>
-  `;
-
-
-  // ====================================================
-  // ROUTES
-  // ====================================================
-
-  app
-    .querySelector(
-      '[data-action="sale"]'
-    )
-    ?.addEventListener(
-      "click",
-      routes.sale
-    );
-
-
-  app
-    .querySelector(
-      '[data-action="income"]'
-    )
-    ?.addEventListener(
-      "click",
-      routes.income
-    );
-
-
-  app
-    .querySelector(
-      '[data-action="journal"]'
-    )
-    ?.addEventListener(
-      "click",
-      routes.journal
-    );
-
-
-  app
-    .querySelector(
-      '[data-action="report"]'
-    )
-    ?.addEventListener(
-      "click",
-      routes.report
-    );
-
-
-  app
-    .querySelector(
-      '[data-action="log"]'
-    )
-    ?.addEventListener(
-      "click",
-      routes.log
-    );
-
-
-  app
-    .querySelector(
-      '[data-action="cashKotopanda"]'
-    )
-    ?.addEventListener(
-      "click",
-      routes.cashKotopanda
-    );
-
-
-  app
-    .querySelector(
-      '[data-action="cashElitka"]'
-    )
-    ?.addEventListener(
-      "click",
-      routes.cashElitka
-    );
-
-
-
-    app
-  .querySelector(
-    '[data-action="cashElitkaReport"]'
-  )
-  ?.addEventListener(
-    "click",
-    routes.cashElitkaReport
-  );
-  // ====================================================
-  // LOGOUT
-  // ====================================================
-
-  document
-    .getElementById(
-      "logoutButton"
-    )
-    .addEventListener(
-      "click",
-      async () => {
-
-        try {
-
-          await authLogout();
-
-        } finally {
-
-          setCurrentUser(null);
-
-          routes.login();
-
-        }
-
-      }
-    );
-}
-</file>
-
 <file path="public/js/pages/log.js">
 import { getEvents } from "../api.js";
 
@@ -6624,254 +6326,6 @@ export function showReport(app, showHome) {
 }
 </file>
 
-<file path="public/js/router.js">
-import { showLogin } from "./pages/login.js";
-import { showHome } from "./pages/home.js";
-import { showSale } from "./pages/sale.js";
-import { showIncome } from "./pages/income.js";
-import { showJournal } from "./pages/journal.js";
-import { showReport } from "./pages/report.js";
-import { showLog } from "./pages/log.js";
-import { showSaleDocument } from "./pages/saleDocument.js";
-
-import { showCash } from "./pages/cash.js";
-import { showCashDocument } from "./pages/cashDocument.js";
-import { showCashReport } from "./pages/cashReport.js";
-
-
-let app = null;
-
-
-// ======================================================
-// INIT ROUTER
-// ======================================================
-
-export function initRouter(root) {
-  app = root;
-}
-
-
-// ======================================================
-// NAVIGATE
-// ======================================================
-
-export function navigate(route, params = {}) {
-  if (!app) {
-    throw new Error("Router is not initialized");
-  }
-
-  switch (route) {
-
-    // --------------------------------------------------
-    // LOGIN
-    // --------------------------------------------------
-
-    case "login":
-      showLogin(
-        app,
-        () => navigate("home")
-      );
-      break;
-
-
-    // --------------------------------------------------
-    // HOME
-    // --------------------------------------------------
-
-    case "home":
-      showHome(app, {
-        login: () =>
-          navigate("login"),
-
-        sale: () =>
-          navigate("sale"),
-
-        income: () =>
-          navigate("income"),
-
-        journal: () =>
-          navigate("journal"),
-
-        report: () =>
-          navigate("report"),
-
-        log: () =>
-          navigate("log"),
-
-        cashKotopanda: () =>
-          navigate("cashKotopanda"),
-
-        cashElitka: () =>
-          navigate("cashElitka"),
-
-        cashElitkaReport: () =>
-          navigate("cashElitkaReport"),
-      });
-      break;
-
-
-    // --------------------------------------------------
-    // SALE
-    // --------------------------------------------------
-
-    case "sale":
-      showSale(
-        app,
-        () => navigate("home")
-      );
-      break;
-
-
-    // --------------------------------------------------
-    // INCOME
-    // --------------------------------------------------
-
-    case "income":
-      showIncome(
-        app,
-        () => navigate("home")
-      );
-      break;
-
-
-    // --------------------------------------------------
-    // JOURNAL
-    // --------------------------------------------------
-
-    case "journal":
-      showJournal(
-        app,
-
-        // Назад
-        () => navigate("home"),
-
-        // Открыть документ
-        (saleId) =>
-          navigate(
-            "saleDocument",
-            { saleId }
-          )
-      );
-      break;
-
-
-    // --------------------------------------------------
-    // SALE DOCUMENT
-    // --------------------------------------------------
-
-    case "saleDocument":
-      showSaleDocument(
-        app,
-        params.saleId,
-
-        // Назад возвращаемся в журнал
-        () => navigate("journal")
-      );
-      break;
-
-
-    // --------------------------------------------------
-    // REPORT
-    // --------------------------------------------------
-
-    case "report":
-      showReport(
-        app,
-        () => navigate("home")
-      );
-      break;
-
-
-    // --------------------------------------------------
-    // LOG
-    // --------------------------------------------------
-
-    case "log":
-      showLog(
-        app,
-        () => navigate("home")
-      );
-      break;
-
-
-    // --------------------------------------------------
-    // CASH KOTOPANDA
-    // --------------------------------------------------
-
-    case "cashKotopanda":
-  showCash(
-    app,
-    () => navigate("home"),
-
-    (documentId) =>
-      navigate(
-        "cashDocument",
-        {
-          cashType: "KOTOPANDA",
-          cashTitle: "Касса Котопанда",
-          documentId,
-        }
-      ),
-
-    "KOTOPANDA",
-    "Касса Котопанда"
-  );
-  break;
-
-
-    // --------------------------------------------------
-    // CASH ELITKA
-    // --------------------------------------------------
-
-    case "cashElitka":
-  showCash(
-    app,
-    () => navigate("home"),
-
-    (documentId) =>
-      navigate(
-        "cashDocument",
-        {
-          cashType: "ELITKA",
-          cashTitle: "Касса Элитка",
-          documentId,
-        }
-      ),
-
-    "ELITKA",
-    "Касса Элитка"
-  );
-  break;
-
-
-  case "cashDocument":
-  showCashDocument(
-    app,
-    params.cashType,
-    params.cashTitle,
-    params.documentId,
-
-    () => {
-      if (
-        params.cashType === "ELITKA"
-      ) {
-        navigate("cashElitka");
-      } else {
-        navigate("cashKotopanda");
-      }
-    }
-  );
-  break;
-    // --------------------------------------------------
-    // DEFAULT
-    // --------------------------------------------------
-
-    default:
-      navigate("home");
-  }
-}
-</file>
-
 <file path="public/js/state.js">
 export let currentUser = null;
 
@@ -7062,6 +6516,304 @@ export function formatDate(value) {
   "observability": {
     "enabled": true
   }
+}
+</file>
+
+<file path="public/js/pages/home.js">
+import {
+  authLogout,
+} from "../api.js";
+
+import {
+  currentUser,
+  setCurrentUser,
+  hasPermission,
+  escapeHtml,
+} from "../state.js";
+
+
+// ======================================================
+// MENU ITEM
+// ======================================================
+
+function menuItem(
+  permission,
+  label,
+  action = ""
+) {
+
+  if (!hasPermission(permission)) {
+    return "";
+  }
+
+  return `
+    <button
+      class="menu-item"
+      type="button"
+      ${
+        action
+          ? `data-action="${action}"`
+          : ""
+      }
+    >
+      ${label}
+    </button>
+  `;
+}
+
+
+// ======================================================
+// CASH VIEW PERMISSIONS
+// ======================================================
+
+function canViewElitka() {
+
+  return (
+    hasPermission("cash.elitka") ||
+    hasPermission("cash.elitka.today") ||
+    hasPermission("cash.elitka.edit")
+  );
+}
+
+
+function canViewKotopanda() {
+
+  return (
+    hasPermission("cash.kotopanda") ||
+    hasPermission("cash.kotopanda.today") ||
+    hasPermission("cash.kotopanda.edit")
+  );
+}
+
+
+// ======================================================
+// CASH MENU ITEM
+// ======================================================
+
+function cashMenuItem(
+  visible,
+  label,
+  action
+) {
+
+  if (!visible) {
+    return "";
+  }
+
+  return `
+    <button
+      class="menu-item"
+      type="button"
+      data-action="${action}"
+    >
+      ${label}
+    </button>
+  `;
+}
+
+
+// ======================================================
+// HOME
+// ======================================================
+
+export function showHome(
+  app,
+  routes
+) {
+
+  app.innerHTML = `
+    <main class="home-page">
+
+      <header class="hero-header">
+
+        <div class="title">
+          Котопанда v2+
+        </div>
+
+        <div class="current-user">
+          ${escapeHtml(
+            currentUser?.name ||
+            "Пользователь"
+          )}
+        </div>
+
+      </header>
+
+
+      <section class="menu">
+
+        ${menuItem(
+          "sale.create",
+          "💰 Реализация",
+          "sale"
+        )}
+
+        ${menuItem(
+          "product.create",
+          "📦 Приход",
+          "income"
+        )}
+
+        ${menuItem(
+          "journal.read",
+          "📋 Журнал реализации",
+          "journal"
+        )}
+
+        ${menuItem(
+          "report.read",
+          "∑ Отчёт продаж",
+          "report"
+        )}
+
+        ${menuItem(
+          "event.read",
+          "🕘 Журнал событий",
+          "log"
+        )}
+
+
+        ${cashMenuItem(
+          canViewKotopanda(),
+          "🧸 Касса Котопанда",
+          "cashKotopanda"
+        )}
+
+        ${cashMenuItem(
+          canViewElitka(),
+          "☕ Касса Элитка",
+          "cashElitka"
+        )}
+
+        ${menuItem(
+          "cash.elitka.report",
+          "∑ Отчёт Элитка",
+           "cashElitkaReport"
+        )}
+
+        <button
+          id="logoutButton"
+          class="menu-item logout"
+          type="button"
+        >
+          🚪 Выйти
+        </button>
+
+      </section>
+
+    </main>
+  `;
+
+
+  // ====================================================
+  // ROUTES
+  // ====================================================
+
+  app
+    .querySelector(
+      '[data-action="sale"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.sale
+    );
+
+
+  app
+    .querySelector(
+      '[data-action="income"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.income
+    );
+
+
+  app
+    .querySelector(
+      '[data-action="journal"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.journal
+    );
+
+
+  app
+    .querySelector(
+      '[data-action="report"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.report
+    );
+
+
+  app
+    .querySelector(
+      '[data-action="log"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.log
+    );
+
+
+  app
+    .querySelector(
+      '[data-action="cashKotopanda"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.cashKotopanda
+    );
+
+
+  app
+    .querySelector(
+      '[data-action="cashElitka"]'
+    )
+    ?.addEventListener(
+      "click",
+      routes.cashElitka
+    );
+
+
+
+    app
+  .querySelector(
+    '[data-action="cashElitkaReport"]'
+  )
+  ?.addEventListener(
+    "click",
+    routes.cashElitkaReport
+  );
+  // ====================================================
+  // LOGOUT
+  // ====================================================
+
+  document
+    .getElementById(
+      "logoutButton"
+    )
+    .addEventListener(
+      "click",
+      async () => {
+
+        try {
+
+          await authLogout();
+
+        } finally {
+
+          setCurrentUser(null);
+
+          routes.login();
+
+        }
+
+      }
+    );
 }
 </file>
 
@@ -8675,6 +8427,429 @@ export function showSale(app, showHome) {
 }
 </file>
 
+<file path="public/js/router.js">
+import { showLogin } from "./pages/login.js";
+import { showHome } from "./pages/home.js";
+
+
+let app = null;
+
+
+// ======================================================
+// INIT ROUTER
+// ======================================================
+
+export function initRouter(root) {
+  app = root;
+}
+
+
+// ======================================================
+// NAVIGATE
+// ======================================================
+
+export async function navigate(
+  route,
+  params = {}
+) {
+
+  if (!app) {
+    throw new Error(
+      "Router is not initialized"
+    );
+  }
+
+
+  switch (route) {
+
+    // ==================================================
+    // LOGIN
+    // ==================================================
+
+    case "login": {
+
+      showLogin(
+        app,
+        () => navigate("home")
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // HOME
+    // ==================================================
+
+    case "home": {
+
+      showHome(app, {
+
+        login: () =>
+          navigate("login"),
+
+        sale: () =>
+          navigate("sale"),
+
+        income: () =>
+          navigate("income"),
+
+        journal: () =>
+          navigate("journal"),
+
+        report: () =>
+          navigate("report"),
+
+        log: () =>
+          navigate("log"),
+
+        cashKotopanda: () =>
+          navigate(
+            "cashKotopanda"
+          ),
+
+        cashElitka: () =>
+          navigate(
+            "cashElitka"
+          ),
+
+        cashElitkaReport: () =>
+          navigate(
+            "cashElitkaReport"
+          ),
+
+      });
+
+      break;
+    }
+
+
+    // ==================================================
+    // SALE
+    // ==================================================
+
+    case "sale": {
+
+      const {
+        showSale
+      } =
+        await import(
+          "./pages/sale.js"
+        );
+
+
+      showSale(
+        app,
+        () => navigate("home")
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // INCOME
+    // ==================================================
+
+    case "income": {
+
+      const {
+        showIncome
+      } =
+        await import(
+          "./pages/income.js"
+        );
+
+
+      showIncome(
+        app,
+        () => navigate("home")
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // JOURNAL
+    // ==================================================
+
+    case "journal": {
+
+      const {
+        showJournal
+      } =
+        await import(
+          "./pages/journal.js"
+        );
+
+
+      showJournal(
+        app,
+
+        // Назад
+        () =>
+          navigate("home"),
+
+        // Открыть документ
+        (saleId) =>
+          navigate(
+            "saleDocument",
+            {
+              saleId,
+            }
+          )
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // SALE DOCUMENT
+    // ==================================================
+
+    case "saleDocument": {
+
+      const {
+        showSaleDocument
+      } =
+        await import(
+          "./pages/saleDocument.js"
+        );
+
+
+      showSaleDocument(
+        app,
+        params.saleId,
+
+        // Назад в журнал
+        () =>
+          navigate("journal")
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // SALES REPORT
+    // ==================================================
+
+    case "report": {
+
+      const {
+        showReport
+      } =
+        await import(
+          "./pages/report.js"
+        );
+
+
+      showReport(
+        app,
+        () => navigate("home")
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // LOG
+    // ==================================================
+
+    case "log": {
+
+      const {
+        showLog
+      } =
+        await import(
+          "./pages/log.js"
+        );
+
+
+      showLog(
+        app,
+        () => navigate("home")
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // CASH KOTOPANDA
+    // ==================================================
+
+    case "cashKotopanda": {
+
+      const {
+        showCash
+      } =
+        await import(
+          "./pages/cash.js"
+        );
+
+
+      showCash(
+        app,
+
+        // Назад
+        () =>
+          navigate("home"),
+
+        // Открыть документ
+        (documentId) =>
+          navigate(
+            "cashDocument",
+            {
+              cashType:
+                "KOTOPANDA",
+
+              cashTitle:
+                "Касса Котопанда",
+
+              documentId,
+            }
+          ),
+
+        "KOTOPANDA",
+        "Касса Котопанда"
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // CASH ELITKA
+    // ==================================================
+
+    case "cashElitka": {
+
+      const {
+        showCash
+      } =
+        await import(
+          "./pages/cash.js"
+        );
+
+
+      showCash(
+        app,
+
+        // Назад
+        () =>
+          navigate("home"),
+
+        // Открыть документ
+        (documentId) =>
+          navigate(
+            "cashDocument",
+            {
+              cashType:
+                "ELITKA",
+
+              cashTitle:
+                "Касса Элитка",
+
+              documentId,
+            }
+          ),
+
+        "ELITKA",
+        "Касса Элитка"
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // CASH ELITKA REPORT
+    // ==================================================
+
+    case "cashElitkaReport": {
+
+      const {
+        showCashReport
+      } =
+        await import(
+          "./pages/cashReport.js"
+        );
+
+
+      showCashReport(
+        app,
+        () => navigate("home")
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // CASH DOCUMENT
+    // ==================================================
+
+    case "cashDocument": {
+
+      const {
+        showCashDocument
+      } =
+        await import(
+          "./pages/cashDocument.js"
+        );
+
+
+      showCashDocument(
+        app,
+
+        params.cashType,
+        params.cashTitle,
+        params.documentId,
+
+        () => {
+
+          if (
+            params.cashType ===
+            "ELITKA"
+          ) {
+
+            navigate(
+              "cashElitka"
+            );
+
+          } else {
+
+            navigate(
+              "cashKotopanda"
+            );
+
+          }
+
+        }
+      );
+
+      break;
+    }
+
+
+    // ==================================================
+    // DEFAULT
+    // ==================================================
+
+    default: {
+
+      navigate("home");
+
+      break;
+    }
+  }
+}
+</file>
+
 <file path="public/js/api.js">
 const API = "https://pos-api.lateshoy.workers.dev";
 
@@ -9880,10 +10055,6 @@ button { cursor: pointer; }
 
 @media (max-width: 600px) {
 
-  .cashReportPeriod {
-    grid-template-columns: 1fr;
-  }
-
   .cashReportBalance {
     font-size: 16px;
   }
@@ -9901,6 +10072,119 @@ button { cursor: pointer; }
     padding-left: 34px;
     padding-right: 8px;
   }
+}
+
+/* =====================================================
+   CASH REPORT PERIOD
+   ===================================================== */
+
+.cashReportPeriod {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  margin: 18px 0 12px;
+}
+
+.cashReportDateField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  flex: 1;
+  min-width: 0;
+
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cashReportDateField .saleDate {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Остаток на начало / конец */
+
+.cashReportBalance {
+  font-size: 21px;
+}
+
+.cashReportBalance strong {
+  font-size: 23px;
+}
+
+
+/* Названия групп:
+   Реализация, Терминал, Съём... */
+
+.cashReportGroupHeader {
+  font-size: 20px;
+}
+
+.cashReportGroupHeader strong {
+  font-size: 20px;
+}
+
+
+/* Строки внутри раскрытого списка */
+
+.cashReportOperationDate {
+  font-size: 18px;
+}
+
+.cashReportOperationMain strong {
+  font-size: 18px;
+}
+
+
+/* Комментарий */
+
+.cashReportOperationComment {
+  font-size: 17px;
+}
+
+
+/* Нет операций */
+
+.cashReportEmpty {
+  font-size: 17px;
+}
+
+/* =====================================================
+   DISABLE TEXT SELECTION
+   ===================================================== */
+
+body {
+  -webkit-user-select: none;
+  user-select: none;
+
+  -webkit-touch-callout: none;
+}
+
+
+/* =====================================================
+   ALLOW SELECTION ONLY IN EDITABLE INPUTS
+   ===================================================== */
+
+input:not([type="date"]),
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+
+  -webkit-touch-callout: default;
+}
+
+
+/* =====================================================
+   DATE
+   ===================================================== */
+
+input[type="date"] {
+  -webkit-user-select: none;
+  user-select: none;
+
+  -webkit-touch-callout: none;
 }
 </file>
 

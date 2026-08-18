@@ -941,3 +941,86 @@ button { cursor: pointer; }
   min-width: 0;
   box-sizing: border-box;
 }
+
+/* Остаток на начало / конец */
+
+.cashReportBalance {
+  font-size: 21px;
+}
+
+.cashReportBalance strong {
+  font-size: 23px;
+}
+
+
+/* Названия групп:
+   Реализация, Терминал, Съём... */
+
+.cashReportGroupHeader {
+  font-size: 20px;
+}
+
+.cashReportGroupHeader strong {
+  font-size: 20px;
+}
+
+
+/* Строки внутри раскрытого списка */
+
+.cashReportOperationDate {
+  font-size: 18px;
+}
+
+.cashReportOperationMain strong {
+  font-size: 18px;
+}
+
+
+/* Комментарий */
+
+.cashReportOperationComment {
+  font-size: 17px;
+}
+
+
+/* Нет операций */
+
+.cashReportEmpty {
+  font-size: 17px;
+}
+
+/* =====================================================
+   DISABLE TEXT SELECTION
+   ===================================================== */
+
+body {
+  -webkit-user-select: none;
+  user-select: none;
+
+  -webkit-touch-callout: none;
+}
+
+
+/* =====================================================
+   ALLOW SELECTION ONLY IN EDITABLE INPUTS
+   ===================================================== */
+
+input:not([type="date"]),
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+
+  -webkit-touch-callout: default;
+}
+
+
+/* =====================================================
+   DATE
+   ===================================================== */
+
+input[type="date"] {
+  -webkit-user-select: none;
+  user-select: none;
+
+  -webkit-touch-callout: none;
+}
